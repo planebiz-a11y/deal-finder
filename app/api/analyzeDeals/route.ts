@@ -102,27 +102,14 @@ function resolveAll(listing: Listing): ExtractedData {
   return { price, year, hours, mileage, condition }
 }
 
+// Hardcoded Utah sell prices from real KSL + Facebook research
+// Never uses scraped comps — too unreliable
 function getUtahResaleValue(
   title: string,
-  utahAvg: number,
   year: number | null,
   condition: Condition,
   hours: number | null
 ): number {
-  // Use real Utah comp if available
-  if (utahAvg > 0) {
-    let resale = utahAvg
-    if (condition.notRunning)     resale = Math.round(resale * 0.75)
-    else if (condition.needsWork) resale = Math.round(resale * 0.85)
-    if (condition.salvage)        resale = Math.round(resale * 0.80)
-    if (condition.noTitle)        resale = Math.round(resale * 0.85)
-    if (condition.clean)          resale = Math.round(resale * 1.05)
-    if (hours !== null && hours > 3000)     resale = Math.round(resale * 0.88)
-    else if (hours !== null && hours < 300) resale = Math.round(resale * 1.05)
-    return resale
-  }
-
-  // Fallback hardcoded table (KSL + Facebook only, no dealers)
   const t = title.toLowerCase()
   const currentYear = new Date().getFullYear()
   const age = year ? currentYear - year : 5
@@ -190,11 +177,11 @@ function estimateCosts(
   else if (condition.needsWork) cost += 1200
   if (condition.salvage)        cost += 1800
   if (condition.noTitle)        cost += 600
-  if (/leak/.test(text))              cost += 750
-  if (/tires|tracks/.test(text))      cost += 600
-  if (/transmission/.test(text))      cost += 1200
-  if (/engine/.test(text))            cost += 1500
-  if (/as.?is/.test(text))            cost += 400
+  if (/leak/.test(text))               cost += 750
+  if (/tires|tracks/.test(text))       cost += 600
+  if (/transmission/.test(text))       cost += 1200
+  if (/engine/.test(text))             cost += 1500
+  if (/as.?is/.test(text))             cost += 400
   if (/flood|water damage/.test(text)) cost += 2000
   if (hours !== null && hours > 3000)      cost += 800
   else if (hours !== null && hours > 1500) cost += 400
@@ -247,7 +234,6 @@ function getNegotiationStrategy(
   sellerPressure: boolean,
   daysListed: number | null,
   previousPrice: number | null,
-  profit: number,
   mao: number,
   price: number
 ): { strategy: string; reason: string } {
@@ -260,7 +246,7 @@ function getNegotiationStrategy(
   if (previousPrice && previousPrice > price) {
     return {
       strategy: "Moderate",
-      reason: `Already dropped price — anchor at MAO`
+      reason: "Already dropped price — anchor at MAO"
     }
   }
   if (price > mao) {
@@ -283,19 +269,15 @@ function getConfidenceScore(
   price: number
 ): number {
   let score = 0
-  // Comp confidence (0-40 pts)
   if (utahSamples >= 8)      score += 40
   else if (utahSamples >= 5) score += 30
   else if (utahSamples >= 3) score += 20
   else if (utahSamples >= 1) score += 10
-  // Spread consistency (0-25 pts)
   score += Math.round(spreadScore * 0.25)
-  // Risk deductions (0-20 pts)
   const hardRisks = riskFlags.filter(f =>
     !["Limited info — ask seller", "Older unit"].includes(f)
   ).length
   score += Math.max(0, 20 - hardRisks * 5)
-  // Profit margin (0-15 pts)
   const roi = profit / price
   if (roi > 0.3)      score += 15
   else if (roi > 0.2) score += 10
@@ -306,16 +288,13 @@ function getConfidenceScore(
 function getLiquidityScore(
   title: string,
   utahSamples: number,
-  daysListed: number | null
 ): { score: number; label: string } {
   const t = title.toLowerCase()
   let score = 50
-  // Category liquidity
   if (/rzr|polaris|can-am/.test(t))    score += 30
   else if (/dump trailer/.test(t))      score += 20
   else if (/skid steer|bobcat/.test(t)) score += 15
   else if (/excavator/.test(t))         score += 10
-  // Demand signal from comp count
   if (utahSamples >= 8)      score += 20
   else if (utahSamples >= 5) score += 10
   else if (utahSamples <= 2) score -= 10
@@ -328,14 +307,14 @@ function getLiquidityScore(
 
 function getUnderpricedAlert(
   price: number,
-  utahAvg: number,
-  utahLow: number
+  resaleValue: number,
 ): string | null {
-  if (!utahAvg || !price) return null
-  const gap = utahAvg - price
+  if (!resaleValue || !price) return null
+  const gap = resaleValue - price
   if (gap <= 0) return null
-  if (gap > utahAvg * 0.3) return `🔥 ${((gap / utahAvg) * 100).toFixed(0)}% under Utah avg — move fast`
-  if (gap > utahAvg * 0.15) return `⚡ $${gap.toLocaleString()} under Utah avg`
+  const pct = Math.round((gap / resaleValue) * 100)
+  if (pct >= 30) return `🔥 ${pct}% under Utah market value — move fast`
+  if (pct >= 15) return `⚡ $${gap.toLocaleString()} under Utah market value`
   return null
 }
 
@@ -376,39 +355,52 @@ export async function POST(req: Request) {
         const description = listing.description || ""
         const { price, year, hours, mileage, condition } = resolveAll(listing)
 
-        const utahAvg = listing.utahAvg || 0
-        const utahLow = listing.utahLow || 0
+        if (!price || price < 200) return null
+
+        const utahLow    = listing.utahLow    || 0
         const utahSamples = listing.utahSamples || 0
         const spreadScore = listing.spreadScore || 0
         const transportCost = listing.transportCost || 0
 
-        const rawResale = getUtahResaleValue(title, 0, year, condition, hours)
-        const estimatedResaleValue = rawResale > 0 ? rawResale : 0
-        if (estimatedResaleValue === 0) return null
+        // Always use hardcoded table — no scraped comps
+        const tableResale = getUtahResaleValue(title, year, condition, hours)
+
+        // Cap resale at 35% above asking — never assume massive markup
+        const estimatedResaleValue = tableResale > 0
+          ? Math.min(tableResale, Math.round(price * 1.35))
+          : Math.round(price * 1.15)
 
         const repairCosts = estimateCosts(condition, title, description, hours)
         const sellingFees = Math.round(estimatedResaleValue * 0.05)
-        const totalCosts = repairCosts + transportCost + sellingFees
+        const totalCosts  = repairCosts + transportCost + sellingFees
         const estimatedProfit = estimatedResaleValue - price - totalCosts
-        const mao = Math.round(estimatedResaleValue - totalCosts - 1500)
-        const recommendedOffer = Math.round(mao * 0.9)
 
-        const riskFlags = getRiskFlags(condition, title, description, year, hours, mileage)
+        // MAO and offer are always BELOW asking price
+        const mao = Math.min(
+          Math.round(estimatedResaleValue - totalCosts - 1500),
+          Math.round(price * 0.92)
+        )
+        const recommendedOffer = Math.min(
+          Math.round(mao * 0.9),
+          Math.round(price * 0.82)
+        )
+
+        if (estimatedProfit < 1000) return null
+
+        const riskFlags   = getRiskFlags(condition, title, description, year, hours, mileage)
         const sellerFlags = getSellerFlags(listing)
-        const dealScore = scoreDeal(estimatedProfit, price, riskFlags)
+        const dealScore   = scoreDeal(estimatedProfit, price, riskFlags)
         const confidenceScore = getConfidenceScore(utahSamples, spreadScore, riskFlags, estimatedProfit, price)
-        const liquidity = getLiquidityScore(title, utahSamples, listing.daysListed || null)
-        const underpricedAlert = getUnderpricedAlert(price, utahAvg, utahLow)
+        const liquidity   = getLiquidityScore(title, utahSamples)
+        const underpricedAlert = getUnderpricedAlert(price, estimatedResaleValue)
         const negotiation = getNegotiationStrategy(
           listing.sellerPressure || false,
           listing.daysListed || null,
           listing.previousPrice || null,
-          estimatedProfit,
           mao,
           price
         )
 
-        // Pre-built offer message
         const offerMessage = `Hi, I saw your ${title} listed for $${price.toLocaleString()}. I can pay cash and pick up today. Would you take $${recommendedOffer.toLocaleString()}?`
 
         return {
@@ -441,7 +433,6 @@ export async function POST(req: Request) {
       })
       .filter(Boolean)
       .filter((deal: any) => deal.price > 0)
-      .filter((deal: any) => deal.estimatedProfit >= 1000)
       .sort((a: any, b: any) => b.confidenceScore - a.confidenceScore)
 
     return NextResponse.json({
