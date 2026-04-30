@@ -382,8 +382,8 @@ export async function POST(req: Request) {
         const spreadScore = listing.spreadScore || 0
         const transportCost = listing.transportCost || 0
 
-        const rawResale = getUtahResaleValue(title, utahAvg, year, condition, hours)
-        const estimatedResaleValue = rawResale > 0 ? Math.min(rawResale, Math.round(price * 1.35)) : 0
+        const rawResale = getUtahResaleValue(title, 0, year, condition, hours)
+        const estimatedResaleValue = rawResale > 0 ? rawResale : 0
         if (estimatedResaleValue === 0) return null
 
         const repairCosts = estimateCosts(condition, title, description, hours)
