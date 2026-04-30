@@ -270,6 +270,7 @@ export async function POST(req: Request) {
         }
       })
       .filter((deal) => deal.price > 0)
+      .filter((deal) => deal.estimatedProfit >= 1000)
       .sort((a, b) => b.score - a.score)
 
     return NextResponse.json({
