@@ -23,37 +23,12 @@ export async function POST(req: Request) {
       },
       body: JSON.stringify({
         model: "claude-opus-4-5",
-        max_tokens: 3000,
+        max_tokens: 4000,
         tools: [{ type: "web_search_20250305", name: "web_search" }],
         messages: [
           {
             role: "user",
-            content: `You are a buying intelligence system for an equipment flipper based in Utah.
-
-Do two things in one response:
-
-1. Search KSL.com for "${query}" currently for sale in Utah. Get real asking prices to establish the Utah sell market.
-
-2. Search Craigslist and Facebook Marketplace for "${query}" for sale in ${region}. Find real current listings outside Utah to buy from.
-
-Return ONLY this raw JSON object, no explanation, no markdown, no code fences:
-
-{
-  "utahAvgPrice": number,
-  "utahLowPrice": number,
-  "utahHighPrice": number,
-  "listings": [
-    {
-      "title": string,
-      "price": number,
-      "description": string,
-      "url": string,
-      "location": string
-    }
-  ]
-}
-
-All prices are numbers only, no $ signs. listings should have 5-10 real results from the buy region.`
+            content: `You are a buying intelligence system for an equipment flipper based in Utah. Search KSL.com for "${query}" for sale in Utah to get Utah sell prices. Then search Craigslist and Facebook Marketplace for "${query}" for sale in ${region}. After searching, return ONLY a raw JSON object, no explanation, no markdown, no code fences: {"utahAvgPrice":12000,"utahLowPrice":9000,"utahHighPrice":15000,"listings":[{"title":"example","price":8500,"description":"runs great","url":"https://craigslist.org/example","location":"Casper, WY"}]}`
           }
         ]
       })
@@ -65,25 +40,31 @@ All prices are numbers only, no $ signs. listings should have 5-10 real results 
       return Response.json({ error: data.error.message }, { status: 500 })
     }
 
-    const textBlock = data.content?.find((b: any) => b.type === "text")?.text || ""
-    const cleaned = textBlock.replace(/```json|```/g, "").trim()
+    // DEBUG — return everything so we can see what Claude sent
+    const allText = (data.content || [])
+      .filter((b: any) => b.type === "text")
+      .map((b: any) => b.text)
+      .join("")
+
+    const jsonMatch = allText.match(/\{[\s\S]*\}/)
+
+    if (!jsonMatch) {
+      return Response.json({
+        error: "No JSON found",
+        allText: allText.slice(0, 3000),
+        contentTypes: (data.content || []).map((b: any) => b.type)
+      }, { status: 500 })
+    }
 
     let result: any = {}
     try {
-      // Try direct parse first
-      result = JSON.parse(cleaned)
-    } catch {
-      // Try to extract JSON object from anywhere in the text
-      const jsonMatch = textBlock.match(/\{[\s\S]*\}/)
-      if (jsonMatch) {
-        try {
-          result = JSON.parse(jsonMatch[0])
-        } catch {
-          return Response.json({ error: "Failed to parse response" }, { status: 500 })
-        }
-      } else {
-        return Response.json({ error: "Failed to parse response" }, { status: 500 })
-      }
+      result = JSON.parse(jsonMatch[0])
+    } catch (e) {
+      return Response.json({
+        error: "JSON parse failed",
+        jsonMatch: jsonMatch[0].slice(0, 1000),
+        allText: allText.slice(0, 2000)
+      }, { status: 500 })
     }
 
     const listings = (result.listings || []).map((l: any) => ({
