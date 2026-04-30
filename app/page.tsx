@@ -51,7 +51,15 @@ export default function Home() {
           <h2>🔥 BEST DEAL</h2>
           <p><strong>{topDeal.title}</strong></p>
           <p>Score: {topDeal.score}</p>
-          <p>Recommendation: {topDeal.recommendation}</p>
+          <p style={{
+  fontWeight: "bold",
+  color:
+    topDeal.recommendation.includes("BUY") ? "green" :
+    topDeal.recommendation.includes("NEGOTIATE") ? "orange" :
+    "red"
+}}>
+  {topDeal.recommendation}
+</p>
           <p>Asking: ${topDeal.price}</p>
           <p>MAO: ${topDeal.mao}</p>
           <p>Offer: ${topDeal.recommendedOffer}</p>
