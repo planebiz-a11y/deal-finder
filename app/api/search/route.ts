@@ -117,7 +117,7 @@ export async function POST(req: Request) {
     }
 
     // Search 2 — Craigslist direct search
-    const clUrl = `https://serpapi.com/search.json?engine=craigslist&query=${encodeURIComponent(query)}&site=${clSite}&category=sss&api_key=${serpKey}`
+    const clUrl = `https://serpapi.com/search.json?engine=craigslist&query=${encodeURIComponent(query)}&site=${clSite}&category=sss&search_type=A&api_key=${serpKey}`
     const clRes = await fetch(clUrl)
     const clData = await clRes.json()
 
