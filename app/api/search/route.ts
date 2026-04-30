@@ -10,6 +10,28 @@ function estimateTransport(r: string): number {
   return 800
 }
 
+function extractPriceFromText(text: string): number {
+  if (!text) return 0
+  const matches = text.match(/\$[\d,]+/g)
+  if (!matches) return 0
+  const numbers = matches
+    .map((m) => Number(m.replace(/[$,]/g, "")))
+    .filter((n) => n > 200)
+    .filter((n) => !(n >= 1900 && n <= 2099))
+  return numbers.length ? Math.max(...numbers) : 0
+}
+
+function detectSellerPressure(text: string): { sellerPressure: boolean; pressureSignals: string[] } {
+  const t = text.toLowerCase()
+  const signals: string[] = []
+  if (/need.{0,5}gone|must sell|moving|relocat/.test(t)) signals.push("Must sell")
+  if (/make offer|obo|or best offer/.test(t)) signals.push("OBO")
+  if (/price.{0,10}reduc|price.{0,10}drop|reduced/.test(t)) signals.push("Price reduced")
+  if (/motivated|serious.{0,10}sell/.test(t)) signals.push("Motivated seller")
+  if (/today|asap|quick/.test(t)) signals.push("Wants quick sale")
+  return { sellerPressure: signals.length > 0, pressureSignals: signals }
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json()
@@ -19,100 +41,89 @@ export async function POST(req: Request) {
       return Response.json({ error: "Missing search query" }, { status: 400 })
     }
 
-    const apiKey = process.env.ANTHROPIC_API_KEY
-    if (!apiKey) {
-      return Response.json({ error: "Missing ANTHROPIC_API_KEY" }, { status: 500 })
+    const serpKey = process.env.SERPAPI_KEY
+    if (!serpKey) {
+      return Response.json({ error: "Missing SERPAPI_KEY" }, { status: 500 })
     }
 
-    const region = buyRegion || "anywhere in the US outside Utah"
-    const locationFilter = city ? `within ${radius || 100} miles of ${city}` : region
+    const region = buyRegion || "US"
+    const locationFilter = city ? `${city} ${radius || 100}mi` : region
     const transportCost = estimateTransport(region)
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 3000,
-        tools: [{ type: "web_search_20250305", name: "web_search" }],
-        messages: [
-          {
-            role: "user",
-            content: `You are a buying intelligence system for an equipment flipper based in Utah.
+    const JUNK = ["wanted", "looking for", "guide", "review", "dealer", "for parts", "insurance", "how to"]
 
-Search KSL.com and Facebook Marketplace for "${query}" in Utah. Find private seller prices only, no dealers.
+    // Search 1 — Utah comps (KSL + Facebook Utah)
+    const utahQuery = `${query} for sale utah site:ksl.com OR site:facebook.com/marketplace`
+    const utahUrl = `https://serpapi.com/search.json?engine=google&q=${encodeURIComponent(utahQuery)}&api_key=${serpKey}`
+    const utahRes = await fetch(utahUrl)
+    const utahData = await utahRes.json()
 
-Then search Craigslist and Facebook Marketplace for "${query}" in ${locationFilter}. Find private seller listings only.
+    const utahPrices: number[] = (utahData.organic_results || [])
+      .slice(0, 15)
+      .map((item: any) => extractPriceFromText(`${item.title} ${item.snippet}`))
+      .filter((p: number) => p > 500)
 
-Respond with ONLY this JSON — no other text, no markdown, just the JSON object:
-{"utahComps":{"avg":11000,"low":8500,"high":14000,"samples":6,"priceList":[8500,9500,11000,12000,13500,14000]},"listings":[{"title":"2019 Polaris RZR XP 1000","price":8900,"description":"runs great low miles","url":"https://craigslist.org/abc","location":"Casper WY","daysListed":5,"previousPrice":null,"sellerPressure":false,"pressureSignals":[]}]}
+    const utahAvg = utahPrices.length
+      ? Math.round(utahPrices.reduce((a: number, b: number) => a + b, 0) / utahPrices.length)
+      : 0
+    const utahLow = utahPrices.length ? Math.min(...utahPrices) : 0
+    const utahHigh = utahPrices.length ? Math.max(...utahPrices) : 0
 
-Replace the example values with real data you find. Keep exact same JSON structure.`
-          }
-        ]
-      })
-    })
-
-    const data = await response.json()
-
-    if (data.error) {
-      return Response.json({ error: data.error.message }, { status: 500 })
+    const utahComps = {
+      avg: utahAvg,
+      low: utahLow,
+      high: utahHigh,
+      samples: utahPrices.length,
+      priceList: utahPrices,
     }
 
-    const allText = (data.content || [])
-      .filter((b: any) => b.type === "text")
-      .map((b: any) => b.text)
-      .join("")
-
-    // Try to extract JSON from response
-    const jsonMatch = allText.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) {
-      return Response.json({
-        error: "No JSON found",
-        allText: allText.slice(0, 2000),
-      }, { status: 500 })
-    }
-
-    let result: any = {}
-    try {
-      result = JSON.parse(jsonMatch[0])
-    } catch {
-      // Try to find just the outer object if nested JSON is malformed
-      const lines = jsonMatch[0].split('\n')
-      const cleaned = lines.filter((l: string) => !l.trim().startsWith('//') && !l.trim().startsWith('*')).join('\n')
-      try {
-        result = JSON.parse(cleaned)
-      } catch {
-        return Response.json({
-          error: "Failed to parse response",
-          raw: jsonMatch[0].slice(0, 1000),
-        }, { status: 500 })
-      }
-    }
-
-    const utahComps = result.utahComps || { avg: 0, low: 0, high: 0, samples: 0, priceList: [] }
-
-    const priceList: number[] = utahComps.priceList || []
+    // Spread score
     let spreadScore = 0
-    if (priceList.length > 1) {
-      const spread = utahComps.high - utahComps.low
-      const spreadPct = spread / (utahComps.avg || 1)
+    if (utahPrices.length > 1 && utahAvg > 0) {
+      const spreadPct = (utahHigh - utahLow) / utahAvg
       spreadScore = spreadPct < 0.2 ? 100 : spreadPct < 0.4 ? 70 : spreadPct < 0.6 ? 40 : 20
     }
 
-    const listings = (result.listings || []).map((l: any) => ({
-      ...l,
-      utahAvg: utahComps.avg,
-      utahLow: utahComps.low,
-      utahHigh: utahComps.high,
-      utahSamples: utahComps.samples,
-      spreadScore,
-      transportCost,
-    }))
+    // Search 2 — Buy region listings
+    const buyQuery = `${query} for sale ${locationFilter} site:craigslist.org OR site:facebook.com/marketplace`
+    const buyUrl = `https://serpapi.com/search.json?engine=google&q=${encodeURIComponent(buyQuery)}&api_key=${serpKey}`
+    const buyRes = await fetch(buyUrl)
+    const buyData = await buyRes.json()
+
+    const listings = (buyData.organic_results || [])
+      .slice(0, 25)
+      .filter((item: any) => {
+        const title = (item.title || "").toLowerCase()
+        const snippet = (item.snippet || "").toLowerCase()
+        if (JUNK.some((w) => title.includes(w))) return false
+        if (!title.includes("$") && !snippet.includes("$")) return false
+        return true
+      })
+      .slice(0, 15)
+      .map((item: any) => {
+        const title = item.title || ""
+        const description = item.snippet || ""
+        const price = extractPriceFromText(`${title} ${description}`)
+        const { sellerPressure, pressureSignals } = detectSellerPressure(`${title} ${description}`)
+        return {
+          title,
+          price,
+          description,
+          url: item.link || "",
+          location: locationFilter,
+          daysListed: null,
+          previousPrice: null,
+          sellerPressure,
+          pressureSignals,
+          utahAvg,
+          utahLow,
+          utahHigh,
+          utahSamples: utahPrices.length,
+          spreadScore,
+          transportCost,
+        }
+      })
+      .filter((l: any) => l.price > 0)
 
     return Response.json({
       listings,
