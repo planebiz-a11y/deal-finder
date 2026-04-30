@@ -1,7 +1,7 @@
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const { query, buyRegion } = body
+    const { query, buyRegion, city, radius } = body
 
     if (!query) {
       return Response.json({ error: "Missing search query" }, { status: 400 })
@@ -12,9 +12,7 @@ export async function POST(req: Request) {
       return Response.json({ error: "Missing ANTHROPIC_API_KEY" }, { status: 500 })
     }
 
-    const region = buyRegion || "anywhere in the US outside Utah"
-
-    // Transport cost by region (to Utah)
+    // Transport cost by region
     function estimateTransport(r: string): number {
       const s = r.toLowerCase()
       if (/wyoming|idaho|nevada|colorado|arizona/.test(s))       return 300
@@ -27,6 +25,8 @@ export async function POST(req: Request) {
       return 800
     }
 
+    const region = buyRegion || "anywhere in the US outside Utah"
+    const locationFilter = city ? `within ${radius || 100} miles of ${city}` : region
     const transportCost = estimateTransport(region)
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -38,12 +38,45 @@ export async function POST(req: Request) {
       },
       body: JSON.stringify({
         model: "claude-opus-4-5",
-        max_tokens: 4000,
+        max_tokens: 5000,
         tools: [{ type: "web_search_20250305", name: "web_search" }],
         messages: [
           {
             role: "user",
-            content: `You are a buying intelligence system for an equipment flipper based in Utah. Search KSL.com for "${query}" for sale in Utah to get Utah sell prices. Then search Craigslist and Facebook Marketplace for "${query}" for sale in ${region}. After searching, return ONLY a raw JSON object, no explanation, no markdown, no code fences: {"utahAvgPrice":12000,"utahLowPrice":9000,"utahHighPrice":15000,"listings":[{"title":"example","price":8500,"description":"runs great","url":"https://craigslist.org/example","location":"Casper, WY"}]}`
+            content: `You are a buying intelligence system for an equipment flipper based in Utah.
+
+TASK 1: Search KSL.com and Facebook Marketplace for "${query}" currently for sale in Utah. Find 5-10 real listings. Extract real asking prices only. Do NOT include MachineryTrader or dealer listings.
+
+TASK 2: Search Craigslist and Facebook Marketplace for "${query}" for sale ${locationFilter}. Find 5-10 real current private seller listings outside Utah.
+
+For each buy listing also detect:
+- seller pressure signals: "need gone", "moving", "make offer", "OBO", "price reduced", "motivated"
+- how long it has been listed if mentioned
+- any price drop mentioned
+
+Return ONLY this raw JSON, no explanation, no markdown, no code fences:
+{
+  "utahComps": {
+    "avg": number,
+    "low": number,
+    "high": number,
+    "samples": number,
+    "priceList": [number]
+  },
+  "listings": [
+    {
+      "title": string,
+      "price": number,
+      "description": string,
+      "url": string,
+      "location": string,
+      "daysListed": number or null,
+      "previousPrice": number or null,
+      "sellerPressure": boolean,
+      "pressureSignals": [string]
+    }
+  ]
+}`
           }
         ]
       })
@@ -65,7 +98,6 @@ export async function POST(req: Request) {
       return Response.json({
         error: "No JSON found",
         allText: allText.slice(0, 3000),
-        contentTypes: (data.content || []).map((b: any) => b.type)
       }, { status: 500 })
     }
 
@@ -76,21 +108,31 @@ export async function POST(req: Request) {
       return Response.json({ error: "Failed to parse response" }, { status: 500 })
     }
 
+    const utahComps = result.utahComps || { avg: 0, low: 0, high: 0, samples: 0, priceList: [] }
+
+    // Calculate spread consistency — tighter spread = higher confidence
+    const priceList: number[] = utahComps.priceList || []
+    let spreadScore = 0
+    if (priceList.length > 1) {
+      const spread = utahComps.high - utahComps.low
+      const spreadPct = spread / utahComps.avg
+      spreadScore = spreadPct < 0.2 ? 100 : spreadPct < 0.4 ? 70 : spreadPct < 0.6 ? 40 : 20
+    }
+
     const listings = (result.listings || []).map((l: any) => ({
       ...l,
-      utahAvgPrice: result.utahAvgPrice || 0,
-      utahLowPrice: result.utahLowPrice || 0,
-      utahHighPrice: result.utahHighPrice || 0,
+      utahAvg: utahComps.avg,
+      utahLow: utahComps.low,
+      utahHigh: utahComps.high,
+      utahSamples: utahComps.samples,
+      spreadScore,
       transportCost,
     }))
 
     return Response.json({
       listings,
-      utahComps: {
-        utahAvgPrice: result.utahAvgPrice || 0,
-        utahLowPrice: result.utahLowPrice || 0,
-        utahHighPrice: result.utahHighPrice || 0,
-      },
+      utahComps,
+      spreadScore,
       transportCost,
     })
 
