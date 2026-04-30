@@ -73,7 +73,7 @@ export default function Home() {
         <div style={{ marginTop: 20 }}>
           <h2>All Deals</h2>
 
-          {deals.map((deal, i) => (
+          {deals.slice(1).map((deal, i) => (
             <div key={i} style={{ border: "1px solid #ccc", padding: 10, marginBottom: 10 }}>
               <p><strong>{deal.title}</strong></p>
               <p>Score: {deal.dealScore}</p>
