@@ -25,23 +25,10 @@ export async function POST(req: Request) {
         messages: [
           {
             role: "user",
-            content: `You are a deal-finding assistant for equipment flippers in Utah.
-
-Generate 10 realistic example listings for: "${query}"
-
-These should look like real Craigslist/KSL listings — varied prices, conditions, years, and detail levels. Some should have lots of info (year, hours, mileage, condition). Some should have very little info, just like real listings. Mix of good deals and bad ones.
-
-Return ONLY a raw JSON array. No explanation, no markdown, no code fences. Just the array.
-
-Each object must have exactly these fields:
-- title: string (e.g. "2019 Polaris RZR 1000 XP")
-- price: number (just digits, no $ sign)
-- description: string (condition notes, hours, issues — sometimes sparse, sometimes detailed)
-- url: string (make up a plausible ksl.com or craigslist.org URL)
-- location: string (a Utah city)`
-          }
-        ]
-      })
+            content: `You are a deal-finding assistant for equipment flippers in Utah. Generate 10 realistic example listings for: "${query}". Return ONLY a raw JSON array, no explanation, no markdown, no code fences. Each object must have: title (string), price (number, no $ sign), description (string), url (string), location (string, a Utah city).`,
+          },
+        ],
+      }),
     })
 
     const data = await response.json()
