@@ -46,16 +46,13 @@ export async function POST(req: Request) {
 
       return true
     })
-    .slice(0, 8)
+    .slice(0, 20)
     .map((item: any) => ({
       title: item.title || "",
       description: item.snippet || "",
       url: item.link || "",
     })) || []
-        title: item.title || "",
-        description: item.snippet || "",
-        url: item.link || "",
-      })) || []
+        
 
     return Response.json({ listings })
   } catch (err) {
