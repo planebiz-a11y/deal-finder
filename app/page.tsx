@@ -9,6 +9,7 @@ const [deals, setDeals] = useState<any[]>([])
 const [topDeal, setTopDeal] = useState<any>(null)
 
   async function analyze() {
+  if (!text.trim()) return
     const res = await fetch("/api/parse", {
       method: "POST",
       headers: {
