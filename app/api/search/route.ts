@@ -1,13 +1,21 @@
-function estimateTransport(r: string): number {
-  const s = r.toLowerCase()
-  if (/wyoming|idaho|nevada|colorado|arizona/.test(s))       return 300
-  if (/california|oregon|washington|montana/.test(s))        return 600
-  if (/texas|new mexico|kansas|nebraska/.test(s))            return 800
-  if (/midwest|iowa|missouri|illinois|indiana|ohio/.test(s)) return 1000
-  if (/minnesota|wisconsin|michigan|dakota/.test(s))         return 1100
-  if (/southeast|georgia|florida|alabama|tennessee/.test(s)) return 1200
-  if (/northeast|new york|pennsylvania|virginia/.test(s))    return 1400
-  return 800
+function transportFromLocation(text: string): number {
+  const t = text.toLowerCase()
+  if (/salt lake|provo|ogden|st george|cedar city|logan|utah/.test(t)) return 100
+  if (/boise|twin falls|idaho falls|pocatello/.test(t))                 return 250
+  if (/las vegas|henderson/.test(t))                                     return 350
+  if (/reno|elko|sparks/.test(t))                                        return 400
+  if (/cheyenne|casper|laramie|gillette/.test(t))                        return 400
+  if (/denver|colorado springs|pueblo|grand junction/.test(t))           return 450
+  if (/phoenix|tucson|flagstaff|mesa/.test(t))                           return 550
+  if (/billings|great falls|missoula|helena/.test(t))                    return 550
+  if (/albuquerque|santa fe|farmington/.test(t))                         return 600
+  if (/portland|eugene|salem/.test(t))                                   return 700
+  if (/seattle|spokane|tacoma/.test(t))                                  return 700
+  if (/los angeles|san diego|fresno|sacramento/.test(t))                 return 750
+  if (/dallas|houston|austin|san antonio/.test(t))                       return 950
+  if (/kansas city|omaha|denver/.test(t))                                return 850
+  if (/chicago|minneapolis|detroit/.test(t))                             return 1200
+  return 500
 }
 
 function extractPriceFromText(text: string): number {
@@ -35,7 +43,7 @@ function detectSellerPressure(text: string): { sellerPressure: boolean; pressure
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const { query, buyRegion, city } = body
+    const { query } = body
 
     if (!query) {
       return Response.json({ error: "Missing search query" }, { status: 400 })
@@ -46,10 +54,7 @@ export async function POST(req: Request) {
       return Response.json({ error: "Missing SERPAPI_KEY" }, { status: 500 })
     }
 
-    const region = buyRegion || "intermountain west"
-    const transportCost = estimateTransport(region)
     const queryWords = query.toLowerCase().split(" ").filter((w: string) => w.length > 2)
-    const locationStr = city ? `${city} ${region}` : region
 
     // Search 1 — Utah comps via KSL
     const utahQuery = `${query} for sale site:ksl.com -dealer -dealership`
@@ -86,8 +91,8 @@ export async function POST(req: Request) {
       spreadScore = spreadPct < 0.2 ? 100 : spreadPct < 0.4 ? 70 : spreadPct < 0.6 ? 40 : 20
     }
 
-    // Search 2 — KSL buy region (direct links that work)
-    const buyQuery = `${query} for sale ${locationStr} site:ksl.com`
+    // Search 2 — KSL broad search, no location filter
+    const buyQuery = `${query} for sale site:ksl.com`
     const buyUrl = `https://serpapi.com/search.json?engine=google&q=${encodeURIComponent(buyQuery)}&num=20&api_key=${serpKey}`
     const buyRes = await fetch(buyUrl)
     const buyData = await buyRes.json()
@@ -107,12 +112,14 @@ export async function POST(req: Request) {
         const description = item.snippet || ""
         const price = extractPriceFromText(`${title} ${description}`)
         const { sellerPressure, pressureSignals } = detectSellerPressure(`${title} ${description}`)
+        const combined = `${title} ${description}`
+        const transportCost = transportFromLocation(combined)
         return {
           title,
           price,
           description,
           url: item.link || "",
-          location: city || region,
+          location: combined.match(/[A-Z][a-z]+,?\s*[A-Z]{2}/)?.[0] || "KSL",
           daysListed: null,
           previousPrice: null,
           sellerPressure,
@@ -131,7 +138,7 @@ export async function POST(req: Request) {
       listings,
       utahComps,
       spreadScore,
-      transportCost,
+      transportCost: 500,
     })
 
   } catch {
