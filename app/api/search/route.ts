@@ -53,7 +53,7 @@ For each buy listing also detect:
 - how long it has been listed if mentioned
 - any price drop mentioned
 
-Return ONLY this raw JSON, no explanation, no markdown, no code fences:
+CRITICAL: Your entire response must be ONLY the JSON object below. Start your response with { and end with }. No text before or after. No explanation. No "Based on my search". Just the raw JSON:
 {
   "utahComps": {
     "avg": number,
