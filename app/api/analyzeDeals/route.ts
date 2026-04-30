@@ -401,7 +401,7 @@ export async function POST(req: Request) {
           Math.round(price * 0.82)
         )
 
-        if (estimatedProfit < 1000) return null
+        // if (estimatedProfit < 1000) return null
 
         const riskFlags   = getRiskFlags(condition, title, description, year, hours, mileage)
         const sellerFlags = getSellerFlags(listing)
