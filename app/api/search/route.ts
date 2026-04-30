@@ -104,7 +104,7 @@ export async function POST(req: Request) {
         const combined = `${title} ${snippet}`
         if (/wanted|looking for|guide|review|parts only/.test(title)) return false
         if (!combined.includes("$")) return false
-        return queryWords.some((w: string) => title.includes(w))
+        return queryWords.some((w: string) => title.includes(w.toLowerCase()))
       })
       .slice(0, 15)
       .map((item: any) => {
