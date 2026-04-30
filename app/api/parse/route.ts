@@ -81,7 +81,7 @@ Return this JSON structure:
     ],
   })
 
-        const content = completion.choices[0].message.content
+          const content = completion.choices[0].message.content
 
   if (!content) {
     return Response.json(
