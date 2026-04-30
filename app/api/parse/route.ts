@@ -130,13 +130,16 @@ Return this JSON structure:
     transportEstimate -
     repairRiskBuffer
 
-  let dealRating = "PASS"
+    let dealRating = "PASS"
 
   if (askingPrice > 0 && askingPrice <= safeMAO) {
     dealRating = "BUY NOW"
   } else if (askingPrice > 0 && askingPrice <= aggressiveMAO) {
     dealRating = "NEGOTIATE"
-  } else if (estimatedProfitAtRecommendedOffer >= minimumProfitTarget) {
+  } else if (
+    recommendedValue - askingPrice > 2000 &&
+    estimatedProfitAtRecommendedOffer >= minimumProfitTarget
+  ) {
     dealRating = "NEGOTIATE"
   }
 
