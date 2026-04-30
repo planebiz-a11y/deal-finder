@@ -56,17 +56,27 @@ export default function Home() {
         Analyze
       </button>
 
-      {topDeal && (
-        <div style={{ marginTop: 20, border: "3px solid green", padding: 15 }}>
-          <h2>🔥 BEST DEAL</h2>
-          <p><strong>{topDeal.title}</strong></p>
-          <p>Score: {topDeal.dealScore}</p>
-          <p>Rating: {topDeal.dealRating}</p>
-          <p>Asking: ${topDeal.askingPrice}</p>
-          <p>MAO: ${topDeal.safeMAO}</p>
-          <p>Profit: ${topDeal.estimatedProfitAtRecommendedOffer}</p>
-          {topDeal.link && <a href={topDeal.link} target="_blank">View Listing</a>}
-        </div>
+      <div style={{ marginTop: 20, border: "3px solid green", padding: 15 }}>
+  <h2>🔥 BEST DEAL</h2>
+
+  <p><strong>{topDeal.title}</strong></p>
+
+  <p>Score: {topDeal.score}</p>
+  <p>Recommendation: {topDeal.recommendation}</p>
+
+  <p>Asking: ${topDeal.price}</p>
+  <p>MAO: ${topDeal.mao}</p>
+  <p>Offer: ${topDeal.recommendedOffer}</p>
+  <p>Profit: ${topDeal.estimatedProfit}</p>
+
+  {topDeal.riskFlags?.length > 0 && (
+    <p>⚠️ {topDeal.riskFlags.join(", ")}</p>
+  )}
+
+  {topDeal.url && (
+    <a href={topDeal.url} target="_blank">View Listing</a>
+  )}
+</div>
       )}
 
       {deals.length > 1 && (
