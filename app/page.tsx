@@ -9,7 +9,10 @@ export default function Home() {
   async function analyze() {
     const res = await fetch("/api/parse", {
       method: "POST",
-      body: JSON.stringify({ text }),
+      headers: {
+  "Content-Type": "application/json",
+},
+body: JSON.stringify({ text }),
     })
 
     const data = await res.json()
