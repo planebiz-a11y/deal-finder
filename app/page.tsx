@@ -12,9 +12,7 @@ export default function Home() {
 
     const searchRes = await fetch("/api/search", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query: text }),
     })
 
@@ -27,9 +25,7 @@ export default function Home() {
 
     const analyzeRes = await fetch("/api/analyzeDeals", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ listings: searchData.listings }),
     })
 
@@ -52,31 +48,27 @@ export default function Home() {
 
       <br /><br />
 
-      <button onClick={analyze}>
-        Analyze
-      </button>
+      <button onClick={analyze}>Analyze</button>
 
-      <div style={{ marginTop: 20, border: "3px solid green", padding: 15 }}>
-  <h2>🔥 BEST DEAL</h2>
+      {topDeal && (
+        <div style={{ marginTop: 20, border: "3px solid green", padding: 15 }}>
+          <h2>🔥 BEST DEAL</h2>
+          <p><strong>{topDeal.title}</strong></p>
+          <p>Score: {topDeal.score}</p>
+          <p>Recommendation: {topDeal.recommendation}</p>
+          <p>Asking: ${topDeal.price}</p>
+          <p>MAO: ${topDeal.mao}</p>
+          <p>Offer: ${topDeal.recommendedOffer}</p>
+          <p>Profit: ${topDeal.estimatedProfit}</p>
 
-  <p><strong>{topDeal.title}</strong></p>
+          {topDeal.riskFlags?.length > 0 && (
+            <p>⚠️ {topDeal.riskFlags.join(", ")}</p>
+          )}
 
-  <p>Score: {topDeal.score}</p>
-  <p>Recommendation: {topDeal.recommendation}</p>
-
-  <p>Asking: ${topDeal.price}</p>
-  <p>MAO: ${topDeal.mao}</p>
-  <p>Offer: ${topDeal.recommendedOffer}</p>
-  <p>Profit: ${topDeal.estimatedProfit}</p>
-
-  {topDeal.riskFlags?.length > 0 && (
-    <p>⚠️ {topDeal.riskFlags.join(", ")}</p>
-  )}
-
-  {topDeal.url && (
-    <a href={topDeal.url} target="_blank">View Listing</a>
-  )}
-</div>
+          {topDeal.url && (
+            <a href={topDeal.url} target="_blank">View Listing</a>
+          )}
+        </div>
       )}
 
       {deals.length > 1 && (
@@ -86,10 +78,19 @@ export default function Home() {
           {deals.slice(1).map((deal, i) => (
             <div key={i} style={{ border: "1px solid #ccc", padding: 10, marginBottom: 10 }}>
               <p><strong>{deal.title}</strong></p>
-              <p>Score: {deal.dealScore}</p>
-              <p>Rating: {deal.dealRating}</p>
-              <p>MAO: ${deal.safeMAO}</p>
-              {deal.link && <a href={deal.link} target="_blank">View</a>}
+              <p>Score: {deal.score}</p>
+              <p>{deal.recommendation}</p>
+              <p>Asking: ${deal.price}</p>
+              <p>MAO: ${deal.mao}</p>
+              <p>Profit: ${deal.estimatedProfit}</p>
+
+              {deal.riskFlags?.length > 0 && (
+                <p>⚠️ {deal.riskFlags.join(", ")}</p>
+              )}
+
+              {deal.url && (
+                <a href={deal.url} target="_blank">View</a>
+              )}
             </div>
           ))}
         </div>
