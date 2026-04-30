@@ -40,7 +40,7 @@ Return ONLY this raw JSON object, no explanation, no markdown, no code fences:
 
 {
   "utahAvgPrice": number,
-  "utahLowPrice": number, 
+  "utahLowPrice": number,
   "utahHighPrice": number,
   "listings": [
     {
