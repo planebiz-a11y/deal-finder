@@ -6,6 +6,16 @@ type Listing = {
   location?: string
   url?: string
   description?: string
+  daysListed?: number | null
+  previousPrice?: number | null
+  sellerPressure?: boolean
+  pressureSignals?: string[]
+  utahAvg?: number
+  utahLow?: number
+  utahHigh?: number
+  utahSamples?: number
+  spreadScore?: number
+  transportCost?: number
 }
 
 type Condition = {
@@ -92,60 +102,80 @@ function resolveAll(listing: Listing): ExtractedData {
   return { price, year, hours, mileage, condition }
 }
 
-function estimateResaleValue(
+function getUtahResaleValue(
   title: string,
-  price: number,
-  condition: Condition,
+  utahAvg: number,
   year: number | null,
-  hours: number | null,
-  mileage: number | null
+  condition: Condition,
+  hours: number | null
 ): number {
+  // Use real Utah comp if available
+  if (utahAvg > 0) {
+    let resale = utahAvg
+    if (condition.notRunning)     resale = Math.round(resale * 0.75)
+    else if (condition.needsWork) resale = Math.round(resale * 0.85)
+    if (condition.salvage)        resale = Math.round(resale * 0.80)
+    if (condition.noTitle)        resale = Math.round(resale * 0.85)
+    if (condition.clean)          resale = Math.round(resale * 1.05)
+    if (hours !== null && hours > 3000)     resale = Math.round(resale * 0.88)
+    else if (hours !== null && hours < 300) resale = Math.round(resale * 1.05)
+    return resale
+  }
+
+  // Fallback hardcoded table (KSL + Facebook only, no dealers)
   const t = title.toLowerCase()
-  let multiplier = 1.10
-
-  if (/rzr|polaris/.test(t))                            multiplier = 1.18
-  else if (/can-am|canam/.test(t))                      multiplier = 1.16
-  else if (/kawasaki|yamaha|honda utv/.test(t))         multiplier = 1.14
-  else if (/dump trailer/.test(t))                      multiplier = 1.15
-  else if (/equipment trailer|flatbed trailer/.test(t)) multiplier = 1.13
-  else if (/utility trailer/.test(t))                   multiplier = 1.10
-  else if (/skid steer/.test(t))                        multiplier = 1.15
-  else if (/excavator|mini ex/.test(t))                 multiplier = 1.13
-  else if (/kubota|john deere|bobcat/.test(t))          multiplier = 1.12
-  else if (/caterpillar|cat\b|case\b/.test(t))          multiplier = 1.12
-  else if (/tractor/.test(t))                           multiplier = 1.10
-  else if (/mahindra|kioti|new holland/.test(t))        multiplier = 1.08
-
   const currentYear = new Date().getFullYear()
   const age = year ? currentYear - year : 5
-  if (age <= 1)       multiplier += 0.10
-  else if (age <= 3)  multiplier += 0.06
-  else if (age <= 5)  multiplier += 0.02
-  else if (age >= 12) multiplier -= 0.10
-  else if (age >= 8)  multiplier -= 0.05
+  let base = 0
 
-  if (hours !== null) {
-    if (hours < 300)       multiplier += 0.06
-    else if (hours < 800)  multiplier += 0.02
-    else if (hours > 3000) multiplier -= 0.10
-    else if (hours > 1500) multiplier -= 0.05
+  if (/rzr|polaris rzr/.test(t)) {
+    if (age <= 2)       base = 20000
+    else if (age <= 4)  base = 16000
+    else if (age <= 7)  base = 10500
+    else if (age <= 10) base = 8500
+    else                base = 6500
+  } else if (/can-am|canam/.test(t)) {
+    if (age <= 2)       base = 18000
+    else if (age <= 4)  base = 14000
+    else if (age <= 7)  base = 10000
+    else                base = 7000
+  } else if (/dump trailer/.test(t)) {
+    base = 6800
+  } else if (/equipment trailer|flatbed trailer/.test(t)) {
+    base = 5500
+  } else if (/utility trailer/.test(t)) {
+    base = 3200
+  } else if (/skid steer/.test(t)) {
+    if (age <= 3)       base = 35000
+    else if (age <= 6)  base = 24000
+    else if (age <= 10) base = 17000
+    else                base = 12000
+  } else if (/excavator|mini ex/.test(t)) {
+    if (age <= 3)       base = 30000
+    else if (age <= 6)  base = 22000
+    else if (age <= 10) base = 15000
+    else                base = 10000
+  } else if (/kubota|john deere|bobcat/.test(t)) {
+    if (age <= 5)       base = 26000
+    else if (age <= 10) base = 18000
+    else                base = 11000
+  } else if (/tractor/.test(t)) {
+    if (age <= 5)       base = 22000
+    else if (age <= 10) base = 14000
+    else                base = 9000
+  } else {
+    return 0
   }
 
-  if (mileage !== null) {
-    if (mileage < 2000)       multiplier += 0.05
-    else if (mileage < 5000)  multiplier += 0.02
-    else if (mileage > 15000) multiplier -= 0.08
-    else if (mileage > 8000)  multiplier -= 0.04
-  }
+  if (condition.notRunning)     base = Math.round(base * 0.75)
+  else if (condition.needsWork) base = Math.round(base * 0.85)
+  if (condition.salvage)        base = Math.round(base * 0.80)
+  if (condition.noTitle)        base = Math.round(base * 0.85)
+  if (condition.clean)          base = Math.round(base * 1.05)
+  if (hours !== null && hours > 3000)     base = Math.round(base * 0.88)
+  else if (hours !== null && hours < 300) base = Math.round(base * 1.05)
 
-  if (condition.notRunning)     multiplier -= 0.12
-  else if (condition.needsWork) multiplier -= 0.08
-  if (condition.salvage)        multiplier -= 0.10
-  if (condition.noTitle)        multiplier -= 0.08
-  if (condition.lowHours)       multiplier += 0.04
-  if (condition.clean)          multiplier += 0.04
-
-  return Math.round(price * Math.max(multiplier, 1.05))
+  return base
 }
 
 function estimateCosts(
@@ -156,20 +186,18 @@ function estimateCosts(
 ): number {
   const text = `${title} ${description}`.toLowerCase()
   let cost = 400
-
   if (condition.notRunning)     cost += 2800
   else if (condition.needsWork) cost += 1200
   if (condition.salvage)        cost += 1800
   if (condition.noTitle)        cost += 600
-  if (/leak/.test(text))         cost += 750
-  if (/tires|tracks/.test(text)) cost += 600
-  if (/transmission/.test(text)) cost += 1200
-  if (/engine/.test(text))       cost += 1500
-  if (/as.?is/.test(text))       cost += 400
+  if (/leak/.test(text))              cost += 750
+  if (/tires|tracks/.test(text))      cost += 600
+  if (/transmission/.test(text))      cost += 1200
+  if (/engine/.test(text))            cost += 1500
+  if (/as.?is/.test(text))            cost += 400
   if (/flood|water damage/.test(text)) cost += 2000
   if (hours !== null && hours > 3000)      cost += 800
   else if (hours !== null && hours > 1500) cost += 400
-
   return cost
 }
 
@@ -180,15 +208,13 @@ function getRiskFlags(
   year: number | null,
   hours: number | null,
   mileage: number | null,
-  price: number
 ): string[] {
   const text = `${title} ${description}`.toLowerCase()
   const flags: string[] = []
-
-  if (condition.notRunning)  flags.push("Not running")
-  if (condition.needsWork)   flags.push("Needs work")
-  if (condition.salvage)     flags.push("Salvage title")
-  if (condition.noTitle)     flags.push("No title")
+  if (condition.notRunning)            flags.push("Not running")
+  if (condition.needsWork)             flags.push("Needs work")
+  if (condition.salvage)               flags.push("Salvage title")
+  if (condition.noTitle)               flags.push("No title")
   if (/mechanic special/.test(text))   flags.push("Mechanic special")
   if (/as.?is/.test(text))             flags.push("As-is")
   if (/flood|water damage/.test(text)) flags.push("Water damage")
@@ -196,33 +222,139 @@ function getRiskFlags(
   if (hours !== null && hours > 3000)        flags.push("High hours")
   if (mileage !== null && mileage > 15000)   flags.push("High mileage")
   if (year !== null && new Date().getFullYear() - year > 15) flags.push("Older unit")
-
   const hasInfo = year !== null || hours !== null || mileage !== null
   if (!hasInfo) flags.push("Limited info — ask seller")
-
   return flags
+}
+
+function getSellerFlags(listing: Listing): string[] {
+  const flags: string[] = []
+  if (listing.sellerPressure) {
+    const signals = listing.pressureSignals || []
+    signals.forEach(s => flags.push(s))
+  }
+  if (listing.previousPrice && listing.price) {
+    const drop = listing.previousPrice - cleanPrice(listing.price)
+    if (drop > 0) flags.push(`Price dropped $${drop.toLocaleString()}`)
+  }
+  if (listing.daysListed && listing.daysListed > 14) {
+    flags.push(`Listed ${listing.daysListed} days`)
+  }
+  return flags
+}
+
+function getNegotiationStrategy(
+  sellerPressure: boolean,
+  daysListed: number | null,
+  previousPrice: number | null,
+  profit: number,
+  mao: number,
+  price: number
+): { strategy: string; reason: string } {
+  if (sellerPressure || (daysListed && daysListed > 21)) {
+    return {
+      strategy: "Aggressive",
+      reason: sellerPressure ? "Seller shows motivation signals" : `Listed ${daysListed} days — seller likely flexible`
+    }
+  }
+  if (previousPrice && previousPrice > price) {
+    return {
+      strategy: "Moderate",
+      reason: `Already dropped price — anchor at MAO`
+    }
+  }
+  if (price > mao) {
+    return {
+      strategy: "Anchor Low",
+      reason: "Asking above MAO — start well below and negotiate up"
+    }
+  }
+  return {
+    strategy: "Moderate",
+    reason: "Standard negotiation — offer MAO, hold firm"
+  }
+}
+
+function getConfidenceScore(
+  utahSamples: number,
+  spreadScore: number,
+  riskFlags: string[],
+  profit: number,
+  price: number
+): number {
+  let score = 0
+  // Comp confidence (0-40 pts)
+  if (utahSamples >= 8)      score += 40
+  else if (utahSamples >= 5) score += 30
+  else if (utahSamples >= 3) score += 20
+  else if (utahSamples >= 1) score += 10
+  // Spread consistency (0-25 pts)
+  score += Math.round(spreadScore * 0.25)
+  // Risk deductions (0-20 pts)
+  const hardRisks = riskFlags.filter(f =>
+    !["Limited info — ask seller", "Older unit"].includes(f)
+  ).length
+  score += Math.max(0, 20 - hardRisks * 5)
+  // Profit margin (0-15 pts)
+  const roi = profit / price
+  if (roi > 0.3)      score += 15
+  else if (roi > 0.2) score += 10
+  else if (roi > 0.1) score += 5
+  return Math.min(100, Math.max(0, score))
+}
+
+function getLiquidityScore(
+  title: string,
+  utahSamples: number,
+  daysListed: number | null
+): { score: number; label: string } {
+  const t = title.toLowerCase()
+  let score = 50
+  // Category liquidity
+  if (/rzr|polaris|can-am/.test(t))    score += 30
+  else if (/dump trailer/.test(t))      score += 20
+  else if (/skid steer|bobcat/.test(t)) score += 15
+  else if (/excavator/.test(t))         score += 10
+  // Demand signal from comp count
+  if (utahSamples >= 8)      score += 20
+  else if (utahSamples >= 5) score += 10
+  else if (utahSamples <= 2) score -= 10
+  const final = Math.min(100, Math.max(0, score))
+  const label = final >= 75 ? "Fast (< 2 weeks)"
+              : final >= 50 ? "Medium (2-4 weeks)"
+              : "Slow (1-2 months)"
+  return { score: final, label }
+}
+
+function getUnderpricedAlert(
+  price: number,
+  utahAvg: number,
+  utahLow: number
+): string | null {
+  if (!utahAvg || !price) return null
+  const gap = utahAvg - price
+  if (gap <= 0) return null
+  if (gap > utahAvg * 0.3) return `🔥 ${((gap / utahAvg) * 100).toFixed(0)}% under Utah avg — move fast`
+  if (gap > utahAvg * 0.15) return `⚡ $${gap.toLocaleString()} under Utah avg`
+  return null
 }
 
 function scoreDeal(profit: number, price: number, riskFlags: string[]): number {
   if (!price || price < 200) return 0
   const roi = profit / price
   let score = 5
-
   if (roi > 0.5)       score += 3
   else if (roi > 0.35) score += 2
   else if (roi > 0.20) score += 1
   else if (roi < 0.05) score -= 2
   else if (roi < 0)    score -= 3
-
   if (profit < 500)       score -= 2
   else if (profit < 1000) score -= 1
-
   const hardRiskCount = riskFlags.filter(
-    (f) => f !== "Limited info — ask seller" && f !== "Older unit"
+    f => !["Limited info — ask seller", "Older unit"].includes(f)
   ).length
   score -= hardRiskCount * 0.75
   if (riskFlags.includes("Limited info — ask seller")) score -= 0.25
-
   return Math.max(1, Math.min(10, Math.round(score)))
 }
 
@@ -243,14 +375,40 @@ export async function POST(req: Request) {
         const title = listing.title || "Untitled listing"
         const description = listing.description || ""
         const { price, year, hours, mileage, condition } = resolveAll(listing)
-        const estimatedResaleValue = (listing as any).utahAvgPrice || estimateResaleValue(title, price, condition, year, hours, mileage)
-        const transportCost = (listing as any).transportCost || 0
-        const estimatedCosts = estimateCosts(condition, title, description, hours) + transportCost
-        const estimatedProfit = estimatedResaleValue - price - estimatedCosts
+
+        const utahAvg = listing.utahAvg || 0
+        const utahLow = listing.utahLow || 0
+        const utahSamples = listing.utahSamples || 0
+        const spreadScore = listing.spreadScore || 0
+        const transportCost = listing.transportCost || 0
+
+        const estimatedResaleValue = getUtahResaleValue(title, utahAvg, year, condition, hours)
+        if (estimatedResaleValue === 0) return null
+
+        const repairCosts = estimateCosts(condition, title, description, hours)
         const sellingFees = Math.round(estimatedResaleValue * 0.05)
-        const mao = Math.round(estimatedResaleValue - estimatedCosts - sellingFees - 1500)
-        const riskFlags = getRiskFlags(condition, title, description, year, hours, mileage, price)
+        const totalCosts = repairCosts + transportCost + sellingFees
+        const estimatedProfit = estimatedResaleValue - price - totalCosts
+        const mao = Math.round(estimatedResaleValue - totalCosts - 1500)
+        const recommendedOffer = Math.round(mao * 0.9)
+
+        const riskFlags = getRiskFlags(condition, title, description, year, hours, mileage)
+        const sellerFlags = getSellerFlags(listing)
         const dealScore = scoreDeal(estimatedProfit, price, riskFlags)
+        const confidenceScore = getConfidenceScore(utahSamples, spreadScore, riskFlags, estimatedProfit, price)
+        const liquidity = getLiquidityScore(title, utahSamples, listing.daysListed || null)
+        const underpricedAlert = getUnderpricedAlert(price, utahAvg, utahLow)
+        const negotiation = getNegotiationStrategy(
+          listing.sellerPressure || false,
+          listing.daysListed || null,
+          listing.previousPrice || null,
+          estimatedProfit,
+          mao,
+          price
+        )
+
+        // Pre-built offer message
+        const offerMessage = `Hi, I saw your ${title} listed for $${price.toLocaleString()}. I can pay cash and pick up today. Would you take $${recommendedOffer.toLocaleString()}?`
 
         return {
           ...listing,
@@ -260,20 +418,30 @@ export async function POST(req: Request) {
           hours,
           mileage,
           estimatedResaleValue,
-          estimatedCosts,
+          repairCosts,
+          transportCost,
+          sellingFees,
+          totalCosts,
           estimatedProfit,
           mao,
-          recommendedOffer: Math.round(mao * 0.9),
-          walkAwayPrice: mao,
+          recommendedOffer,
           score: dealScore,
           recommendation: recommendation(dealScore),
+          confidenceScore,
+          liquidityScore: liquidity.score,
+          liquidityLabel: liquidity.label,
+          underpricedAlert,
           riskFlags,
+          sellerFlags,
+          negotiation,
+          offerMessage,
           condition,
         }
       })
-      .filter((deal) => deal.price > 0)
-      .filter((deal) => deal.estimatedProfit >= 1000)
-      .sort((a, b) => b.score - a.score)
+      .filter(Boolean)
+      .filter((deal: any) => deal.price > 0)
+      .filter((deal: any) => deal.estimatedProfit >= 1000)
+      .sort((a: any, b: any) => b.confidenceScore - a.confidenceScore)
 
     return NextResponse.json({
       deals: analyzedDeals,
