@@ -91,7 +91,6 @@ Return this JSON structure:
   }
 
   try {
-  try {
   const data = JSON.parse(content)
 
   const recommendedValue = Number(data.recommendedFastFlipValue || 0)
