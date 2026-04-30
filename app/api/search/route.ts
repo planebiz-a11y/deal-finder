@@ -70,9 +70,20 @@ All prices are numbers only, no $ signs. listings should have 5-10 real results 
 
     let result: any = {}
     try {
+      // Try direct parse first
       result = JSON.parse(cleaned)
     } catch {
-      return Response.json({ error: "Failed to parse response" }, { status: 500 })
+      // Try to extract JSON object from anywhere in the text
+      const jsonMatch = textBlock.match(/\{[\s\S]*\}/)
+      if (jsonMatch) {
+        try {
+          result = JSON.parse(jsonMatch[0])
+        } catch {
+          return Response.json({ error: "Failed to parse response" }, { status: 500 })
+        }
+      } else {
+        return Response.json({ error: "Failed to parse response" }, { status: 500 })
+      }
     }
 
     const listings = (result.listings || []).map((l: any) => ({
