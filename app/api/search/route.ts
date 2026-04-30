@@ -19,7 +19,7 @@ export async function POST(req: Request) {
       )
     }
 
-    const searchQuery = `${query} for sale $ (site:craigslist.org OR site:ksl.com OR site:facebook.com/marketplace)`
+    const searchQuery = `${query} utah for sale $ (site:craigslist.org OR site:ksl.com OR site:facebook.com/marketplace)`
 
     const url = `https://serpapi.com/search.json?engine=google&q=${encodeURIComponent(
       searchQuery
