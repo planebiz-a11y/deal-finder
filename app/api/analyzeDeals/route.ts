@@ -379,12 +379,12 @@ export async function POST(req: Request) {
         const spreadScore = listing.spreadScore || 0
         const transportCost = listing.transportCost || 50
 
-        // Use KSL avg if available, else hardcoded table
+        // Table first — more reliable than scraped avg
         const tableResale = getUtahResaleValue(title, year, condition, hours)
-        const estimatedResaleValue = utahAvg > 0
+        const estimatedResaleValue = tableResale > 0
+          ? tableResale
+          : utahAvg > 0
           ? utahAvg
-          : tableResale > 0
-          ? Math.min(tableResale, Math.round(price * 1.35))
           : Math.round(price * 1.15)
 
         const repairCosts = estimateCosts(condition, title, description, hours)
