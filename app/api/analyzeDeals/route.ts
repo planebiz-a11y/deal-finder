@@ -101,7 +101,7 @@ function estimateResaleValue(
   mileage: number | null
 ): number {
   const t = title.toLowerCase()
-  let multiplier = 1.25
+  let multiplier = 1.10
 
   if (/rzr|polaris/.test(t))                            multiplier = 1.18
   else if (/can-am|canam/.test(t))                      multiplier = 1.16
