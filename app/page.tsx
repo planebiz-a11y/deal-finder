@@ -8,27 +8,28 @@ export default function Home() {
   const [topDeal, setTopDeal] = useState<any>(null)
 
   async function analyze() {
-  if (!text.trim()) return
+    if (!text.trim()) return
 
-  const searchData = {
-    listings: [
-      { title: "2018 RZR 1000", price: 8500 },
-      { title: "Dump trailer", price: 4000 },
-      { title: "Kubota excavator needs work", price: 12000 }
-    ]
+    // 🔥 TEST DATA (bypasses search)
+    const searchData = {
+      listings: [
+        { title: "2018 RZR 1000", price: 8500 },
+        { title: "Dump trailer", price: 4000 },
+        { title: "Kubota excavator needs work", price: 12000 }
+      ]
+    }
+
+    const analyzeRes = await fetch("/api/analyzeDeals", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ listings: searchData.listings }),
+    })
+
+    const data = await analyzeRes.json()
+
+    setDeals(data.deals || [])
+    setTopDeal(data.topDeal || null)
   }
-
-  const analyzeRes = await fetch("/api/analyzeDeals", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ listings: searchData.listings }),
-  })
-
-  const data = await analyzeRes.json()
-
-  setDeals(data.deals || [])
-  setTopDeal(data.topDeal || null)
-}
 
   return (
     <div style={{ padding: 20 }}>
@@ -36,7 +37,7 @@ export default function Home() {
 
       <textarea
         style={{ width: "100%", height: 150 }}
-        placeholder="Search listings..."
+        placeholder="Type anything (test mode)..."
         value={text}
         onChange={(e) => setText(e.target.value)}
       />
@@ -59,10 +60,6 @@ export default function Home() {
           {topDeal.riskFlags?.length > 0 && (
             <p>⚠️ {topDeal.riskFlags.join(", ")}</p>
           )}
-
-          {topDeal.url && (
-            <a href={topDeal.url} target="_blank">View Listing</a>
-          )}
         </div>
       )}
 
@@ -81,10 +78,6 @@ export default function Home() {
 
               {deal.riskFlags?.length > 0 && (
                 <p>⚠️ {deal.riskFlags.join(", ")}</p>
-              )}
-
-              {deal.url && (
-                <a href={deal.url} target="_blank">View</a>
               )}
             </div>
           ))}
