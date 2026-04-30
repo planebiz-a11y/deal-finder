@@ -177,9 +177,5 @@ Return this JSON structure:
     { error: "Invalid JSON returned from AI", raw: content },
     { status: 500 }
   )
-} catch (err) {
-  return Response.json(
-    { error: "Invalid JSON returned from AI", raw: content },
-    { status: 500 }
-  )
+}
 }
