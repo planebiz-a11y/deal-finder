@@ -8,79 +8,222 @@ type Listing = {
   description?: string
 }
 
+type Condition = {
+  needsWork: boolean
+  notRunning: boolean
+  salvage: boolean
+  noTitle: boolean
+  lowHours: boolean
+  clean: boolean
+}
+
+type ExtractedData = {
+  price: number
+  year: number | null
+  hours: number | null
+  mileage: number | null
+  condition: Condition
+}
+
+function extractPrice(text: string): number {
+  if (!text) return 0
+  const matches = text.match(/\$[\d,]+/g)
+  if (!matches) return 0
+  const numbers = matches
+    .map((m) => Number(m.replace(/[$,]/g, "")))
+    .filter((n) => n > 200)
+    .filter((n) => !(n >= 1900 && n <= 2099))
+  return numbers.length ? Math.max(...numbers) : 0
+}
+
 function cleanPrice(price: any): number {
   if (typeof price === "number") return price
   if (!price) return 0
-  return Number(String(price).replace(/[^0-9]/g, "")) || 0
+  const n = Number(String(price).replace(/[^0-9]/g, "")) || 0
+  if (n >= 1900 && n <= 2099) return 0
+  return n
 }
 
-function estimateResaleValue(title: string, price: number): number {
-  const t = title.toLowerCase()
+function extractYear(text: string): number | null {
+  const match = text.match(/\b(19[5-9]\d|20[0-2]\d)\b/)
+  return match ? parseInt(match[0]) : null
+}
 
+function extractHours(text: string): number | null {
+  const match = text.match(/(\d{1,4}(?:\.\d)?)\s*(?:k\s*)?(?:hours?|hrs?)\b/i)
+  if (!match) return null
+  let val = parseFloat(match[1])
+  if (/k/i.test(match[0])) val *= 1000
+  return val > 0 && val < 30000 ? Math.round(val) : null
+}
+
+function extractMileage(text: string): number | null {
+  const match = text.match(/(\d{1,3}(?:,\d{3})?|\d+k)\s*(?:miles?|mi)\b/i)
+  if (!match) return null
+  const raw = match[1].replace(/,/g, "")
+  let val = /k/i.test(raw) ? parseFloat(raw) * 1000 : parseFloat(raw)
+  return val > 0 && val < 500000 ? Math.round(val) : null
+}
+
+function detectCondition(title: string, description: string): Condition {
+  const text = `${title} ${description}`.toLowerCase()
+  return {
+    needsWork:  /needs work|project unit|mechanic special|fixer|rough shape/.test(text),
+    notRunning: /not running|doesn.t run|doesn.t start|no start|blown|seized/.test(text),
+    salvage:    /salvage/.test(text),
+    noTitle:    /no title/.test(text),
+    lowHours:   /low hours|low hrs/.test(text),
+    clean:      /clean title|one owner|well maintained|garage kept|like new/.test(text),
+  }
+}
+
+function resolveAll(listing: Listing): ExtractedData {
+  const title = listing.title || ""
+  const description = listing.description || ""
+  const combined = `${title} ${description}`
+  const price =
+    cleanPrice(listing.price) ||
+    extractPrice(title) ||
+    extractPrice(description)
+  const year = extractYear(combined)
+  const hours = extractHours(combined)
+  const mileage = extractMileage(combined)
+  const condition = detectCondition(title, description)
+  return { price, year, hours, mileage, condition }
+}
+
+function estimateResaleValue(
+  title: string,
+  price: number,
+  condition: Condition,
+  year: number | null,
+  hours: number | null,
+  mileage: number | null
+): number {
+  const t = title.toLowerCase()
   let multiplier = 1.25
 
-  if (t.includes("rzr") || t.includes("can-am") || t.includes("polaris")) {
-    multiplier = 1.35
+  if (/rzr|polaris/.test(t))                            multiplier = 1.38
+  else if (/can-am|canam/.test(t))                      multiplier = 1.35
+  else if (/kawasaki|yamaha|honda utv/.test(t))         multiplier = 1.30
+  else if (/dump trailer/.test(t))                      multiplier = 1.32
+  else if (/equipment trailer|flatbed trailer/.test(t)) multiplier = 1.28
+  else if (/utility trailer/.test(t))                   multiplier = 1.22
+  else if (/skid steer/.test(t))                        multiplier = 1.30
+  else if (/excavator|mini ex/.test(t))                 multiplier = 1.28
+  else if (/kubota|john deere|bobcat/.test(t))          multiplier = 1.25
+  else if (/caterpillar|cat\b|case\b/.test(t))          multiplier = 1.26
+  else if (/tractor/.test(t))                           multiplier = 1.22
+  else if (/mahindra|kioti|new holland/.test(t))        multiplier = 1.20
+
+  const currentYear = new Date().getFullYear()
+  const age = year ? currentYear - year : 5
+  if (age <= 1)       multiplier += 0.10
+  else if (age <= 3)  multiplier += 0.06
+  else if (age <= 5)  multiplier += 0.02
+  else if (age >= 12) multiplier -= 0.10
+  else if (age >= 8)  multiplier -= 0.05
+
+  if (hours !== null) {
+    if (hours < 300)       multiplier += 0.06
+    else if (hours < 800)  multiplier += 0.02
+    else if (hours > 3000) multiplier -= 0.10
+    else if (hours > 1500) multiplier -= 0.05
   }
 
-  if (t.includes("dump trailer") || t.includes("equipment trailer")) {
-    multiplier = 1.3
+  if (mileage !== null) {
+    if (mileage < 2000)       multiplier += 0.05
+    else if (mileage < 5000)  multiplier += 0.02
+    else if (mileage > 15000) multiplier -= 0.08
+    else if (mileage > 8000)  multiplier -= 0.04
   }
 
-  if (t.includes("skid steer") || t.includes("excavator") || t.includes("kubota")) {
-    multiplier = 1.28
-  }
+  if (condition.notRunning)     multiplier -= 0.12
+  else if (condition.needsWork) multiplier -= 0.08
+  if (condition.salvage)        multiplier -= 0.10
+  if (condition.noTitle)        multiplier -= 0.08
+  if (condition.lowHours)       multiplier += 0.04
+  if (condition.clean)          multiplier += 0.04
 
-  if (t.includes("needs work") || t.includes("project") || t.includes("not running")) {
-    multiplier = 1.1
-  }
-
-  return Math.round(price * multiplier)
+  return Math.round(price * Math.max(multiplier, 1.05))
 }
 
-function estimateCosts(title: string, description = ""): number {
+function estimateCosts(
+  condition: Condition,
+  title: string,
+  description: string,
+  hours: number | null
+): number {
   const text = `${title} ${description}`.toLowerCase()
+  let cost = 400
 
-  let cost = 500
-
-  if (text.includes("needs work")) cost += 1000
-  if (text.includes("not running")) cost += 2500
-  if (text.includes("salvage")) cost += 2000
-  if (text.includes("leak")) cost += 750
-  if (text.includes("hours")) cost += 300
-  if (text.includes("tires")) cost += 500
+  if (condition.notRunning)     cost += 2800
+  else if (condition.needsWork) cost += 1200
+  if (condition.salvage)        cost += 1800
+  if (condition.noTitle)        cost += 600
+  if (/leak/.test(text))         cost += 750
+  if (/tires|tracks/.test(text)) cost += 600
+  if (/transmission/.test(text)) cost += 1200
+  if (/engine/.test(text))       cost += 1500
+  if (/as.?is/.test(text))       cost += 400
+  if (/flood|water damage/.test(text)) cost += 2000
+  if (hours !== null && hours > 3000)      cost += 800
+  else if (hours !== null && hours > 1500) cost += 400
 
   return cost
 }
 
-function getRiskFlags(title: string, description = ""): string[] {
+function getRiskFlags(
+  condition: Condition,
+  title: string,
+  description: string,
+  year: number | null,
+  hours: number | null,
+  mileage: number | null,
+  price: number
+): string[] {
   const text = `${title} ${description}`.toLowerCase()
   const flags: string[] = []
 
-  if (text.includes("not running")) flags.push("Not running")
-  if (text.includes("needs work")) flags.push("Needs work")
-  if (text.includes("salvage")) flags.push("Salvage title")
-  if (text.includes("no title")) flags.push("No title")
-  if (text.includes("mechanic special")) flags.push("Mechanic special")
-  if (text.includes("as is")) flags.push("As-is risk")
+  if (condition.notRunning)  flags.push("Not running")
+  if (condition.needsWork)   flags.push("Needs work")
+  if (condition.salvage)     flags.push("Salvage title")
+  if (condition.noTitle)     flags.push("No title")
+  if (/mechanic special/.test(text))   flags.push("Mechanic special")
+  if (/as.?is/.test(text))             flags.push("As-is")
+  if (/flood|water damage/.test(text)) flags.push("Water damage")
+  if (/lien/.test(text))               flags.push("Possible lien")
+  if (hours !== null && hours > 3000)        flags.push("High hours")
+  if (mileage !== null && mileage > 15000)   flags.push("High mileage")
+  if (year !== null && new Date().getFullYear() - year > 15) flags.push("Older unit")
+
+  const hasInfo = year !== null || hours !== null || mileage !== null
+  if (!hasInfo) flags.push("Limited info — ask seller")
 
   return flags
 }
 
 function scoreDeal(profit: number, price: number, riskFlags: string[]): number {
-  if (!price) return 0
-
+  if (!price || price < 200) return 0
   const roi = profit / price
   let score = 5
 
-  if (roi > 0.5) score += 3
-  else if (roi > 0.3) score += 2
-  else if (roi > 0.15) score += 1
+  if (roi > 0.5)       score += 3
+  else if (roi > 0.35) score += 2
+  else if (roi > 0.20) score += 1
   else if (roi < 0.05) score -= 2
+  else if (roi < 0)    score -= 3
 
-  score -= riskFlags.length
+  if (profit < 500)       score -= 2
+  else if (profit < 1000) score -= 1
 
-  return Math.max(1, Math.min(10, score))
+  const hardRiskCount = riskFlags.filter(
+    (f) => f !== "Limited info — ask seller" && f !== "Older unit"
+  ).length
+  score -= hardRiskCount * 0.75
+  if (riskFlags.includes("Limited info — ask seller")) score -= 0.25
+
+  return Math.max(1, Math.min(10, Math.round(score)))
 }
 
 function recommendation(score: number): string {
@@ -95,45 +238,45 @@ export async function POST(req: Request) {
     const body = await req.json()
     const listings: Listing[] = body.listings || []
 
-    const analyzedDeals = listings.map((listing) => {
-      const title = listing.title || "Untitled listing"
-      const price = cleanPrice(listing.price)
-      const description = listing.description || ""
+    const analyzedDeals = listings
+      .map((listing) => {
+        const title = listing.title || "Untitled listing"
+        const description = listing.description || ""
+        const { price, year, hours, mileage, condition } = resolveAll(listing)
+        const estimatedResaleValue = estimateResaleValue(title, price, condition, year, hours, mileage)
+        const estimatedCosts = estimateCosts(condition, title, description, hours)
+        const estimatedProfit = estimatedResaleValue - price - estimatedCosts
+        const mao = Math.round((estimatedResaleValue - estimatedCosts) * 0.7)
+        const riskFlags = getRiskFlags(condition, title, description, year, hours, mileage, price)
+        const dealScore = scoreDeal(estimatedProfit, price, riskFlags)
 
-      const estimatedResaleValue = estimateResaleValue(title, price)
-      const estimatedCosts = estimateCosts(title, description)
-      const estimatedProfit = estimatedResaleValue - price - estimatedCosts
-      const mao = Math.round((estimatedResaleValue - estimatedCosts) * 0.7)
-
-      const riskFlags = getRiskFlags(title, description)
-      const dealScore = scoreDeal(estimatedProfit, price, riskFlags)
-
-      return {
-        ...listing,
-        title,
-        price,
-        estimatedResaleValue,
-        estimatedCosts,
-        estimatedProfit,
-        mao,
-        recommendedOffer: Math.round(mao * 0.9),
-        walkAwayPrice: mao,
-        score: dealScore,
-        recommendation: recommendation(dealScore),
-        riskFlags,
-      }
-    })
-
-    analyzedDeals.sort((a, b) => b.score - a.score)
+        return {
+          ...listing,
+          title,
+          price,
+          year,
+          hours,
+          mileage,
+          estimatedResaleValue,
+          estimatedCosts,
+          estimatedProfit,
+          mao,
+          recommendedOffer: Math.round(mao * 0.9),
+          walkAwayPrice: mao,
+          score: dealScore,
+          recommendation: recommendation(dealScore),
+          riskFlags,
+          condition,
+        }
+      })
+      .filter((deal) => deal.price > 0)
+      .sort((a, b) => b.score - a.score)
 
     return NextResponse.json({
       deals: analyzedDeals,
       topDeal: analyzedDeals[0] || null,
     })
   } catch (error) {
-    return NextResponse.json(
-      { error: "Failed to analyze deals" },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: "Failed to analyze deals" }, { status: 500 })
   }
 }
