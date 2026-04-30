@@ -46,57 +46,60 @@ export async function POST(req: Request) {
       return Response.json({ error: "Missing SERPAPI_KEY" }, { status: 500 })
     }
 
-    const region = buyRegion || "US"
+    const region = buyRegion || "intermountain west"
     const transportCost = estimateTransport(region)
     const queryWords = query.toLowerCase().split(" ").filter((w: string) => w.length > 2)
+    const locationStr = city ? `${city} ${region}` : region
 
     // Search 1 — Utah comps via KSL
-    const utahQuery = `${query} for sale by owner site:ksl.com -dealer -dealership`
-    const utahUrl = `https://serpapi.com/search.json?engine=google&q=${encodeURIComponent(utahQuery)}&api_key=${serpKey}`
+    const utahQuery = `${query} for sale site:ksl.com -dealer -dealership`
+    const utahUrl = `https://serpapi.com/search.json?engine=google&q=${encodeURIComponent(utahQuery)}&num=15&api_key=${serpKey}`
     const utahRes = await fetch(utahUrl)
     const utahData = await utahRes.json()
 
     const utahPrices: number[] = (utahData.organic_results || [])
-      .slice(0, 15)
       .map((item: any) => extractPriceFromText(`${item.title} ${item.snippet}`))
-      .filter((p: number) => p > 500)
+      .filter((p: number) => p > 500 && p < 75000)
 
-    const utahAvg = utahPrices.length
-      ? Math.round(utahPrices.reduce((a: number, b: number) => a + b, 0) / utahPrices.length)
+    const minUtah = utahPrices.length ? Math.min(...utahPrices) : 0
+    const filteredUtahPrices = minUtah > 0
+      ? utahPrices.filter((p: number) => p <= minUtah * 3)
+      : utahPrices
+
+    const utahAvg = filteredUtahPrices.length
+      ? Math.round(filteredUtahPrices.reduce((a: number, b: number) => a + b, 0) / filteredUtahPrices.length)
       : 0
-    const utahLow  = utahPrices.length ? Math.min(...utahPrices) : 0
-    const utahHigh = utahPrices.length ? Math.max(...utahPrices) : 0
+    const utahLow  = filteredUtahPrices.length ? Math.min(...filteredUtahPrices) : 0
+    const utahHigh = filteredUtahPrices.length ? Math.max(...filteredUtahPrices) : 0
 
     const utahComps = {
       avg: utahAvg,
       low: utahLow,
       high: utahHigh,
-      samples: utahPrices.length,
-      priceList: utahPrices,
+      samples: filteredUtahPrices.length,
+      priceList: filteredUtahPrices,
     }
 
     let spreadScore = 0
-    if (utahPrices.length > 1 && utahAvg > 0) {
+    if (filteredUtahPrices.length > 1 && utahAvg > 0) {
       const spreadPct = (utahHigh - utahLow) / utahAvg
       spreadScore = spreadPct < 0.2 ? 100 : spreadPct < 0.4 ? 70 : spreadPct < 0.6 ? 40 : 20
     }
 
-    // Search 2 — Buy region via Google + Craigslist
-    const locationStr = city ? `${city} ${region}` : region
-    const buyQuery = `${query} for sale ${locationStr} site:craigslist.org -wanted -"looking for"`
+    // Search 2 — KSL buy region (direct links that work)
+    const buyQuery = `${query} for sale ${locationStr} site:ksl.com`
     const buyUrl = `https://serpapi.com/search.json?engine=google&q=${encodeURIComponent(buyQuery)}&num=20&api_key=${serpKey}`
     const buyRes = await fetch(buyUrl)
     const buyData = await buyRes.json()
 
     const listings = (buyData.organic_results || [])
-      .slice(0, 25)
       .filter((item: any) => {
         const title = (item.title || "").toLowerCase()
         const snippet = (item.snippet || "").toLowerCase()
         const combined = `${title} ${snippet}`
         if (/wanted|looking for|guide|review|parts only/.test(title)) return false
         if (!combined.includes("$")) return false
-        return queryWords.some((w: string) => combined.includes(w))
+        return queryWords.some((w: string) => title.includes(w))
       })
       .slice(0, 15)
       .map((item: any) => {
@@ -117,7 +120,7 @@ export async function POST(req: Request) {
           utahAvg,
           utahLow,
           utahHigh,
-          utahSamples: utahPrices.length,
+          utahSamples: filteredUtahPrices.length,
           spreadScore,
           transportCost,
         }
