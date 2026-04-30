@@ -116,26 +116,36 @@ export async function POST(req: Request) {
       spreadScore = spreadPct < 0.2 ? 100 : spreadPct < 0.4 ? 70 : spreadPct < 0.6 ? 40 : 20
     }
 
-    // Search 2 — Craigslist direct search
-    const clUrl = `https://serpapi.com/search.json?engine=craigslist&query=${encodeURIComponent(query)}&site=${clSite}&category=sss&search_type=A&api_key=${serpKey}`
-    const clRes = await fetch(clUrl)
-    const clData = await clRes.json()
+    // Search 2 — Google search targeting Craigslist by region
+    const clSiteDomain = `${clSite}.craigslist.org`
+    const buyQuery = `${query} for sale site:${clSiteDomain} -wanted -"looking for"`
+    const buyUrl = `https://serpapi.com/search.json?engine=google&q=${encodeURIComponent(buyQuery)}&num=20&api_key=${serpKey}`
+    const buyRes = await fetch(buyUrl)
+    const buyData = await buyRes.json()
 
-    const listings = (clData.organic_results || clData.ads || clData.results || [])
+    const listings = (buyData.organic_results || [])
       .slice(0, 20)
+      .filter((item: any) => {
+        const title = (item.title || "").toLowerCase()
+        const snippet = (item.snippet || "").toLowerCase()
+        const combined = `${title} ${snippet}`
+        if (!combined.includes("$")) return false
+        if (/wanted|looking for|guide|review/.test(title)) return false
+        // Must match at least one query word
+        const queryWords = query.toLowerCase().split(" ").filter((w: string) => w.length > 2)
+        return queryWords.some((w: string) => combined.includes(w))
+      })
       .map((item: any) => {
-        const title = item.title || item.name || ""
-        const description = item.snippet || item.description || ""
-        const price = item.price
-          ? Number(String(item.price).replace(/[^0-9]/g, ""))
-          : extractPriceFromText(`${title} ${description}`)
+        const title = item.title || ""
+        const description = item.snippet || ""
+        const price = extractPriceFromText(`${title} ${description}`)
         const { sellerPressure, pressureSignals } = detectSellerPressure(`${title} ${description}`)
         return {
           title,
           price,
           description,
-          url: item.link || item.url || "",
-          location: item.location || `${city || region}`,
+          url: item.link || "",
+          location: city || region,
           daysListed: null,
           previousPrice: null,
           sellerPressure,
