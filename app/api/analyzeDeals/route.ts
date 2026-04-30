@@ -103,18 +103,18 @@ function estimateResaleValue(
   const t = title.toLowerCase()
   let multiplier = 1.25
 
-  if (/rzr|polaris/.test(t))                            multiplier = 1.38
-  else if (/can-am|canam/.test(t))                      multiplier = 1.35
-  else if (/kawasaki|yamaha|honda utv/.test(t))         multiplier = 1.30
-  else if (/dump trailer/.test(t))                      multiplier = 1.32
-  else if (/equipment trailer|flatbed trailer/.test(t)) multiplier = 1.28
-  else if (/utility trailer/.test(t))                   multiplier = 1.22
-  else if (/skid steer/.test(t))                        multiplier = 1.30
-  else if (/excavator|mini ex/.test(t))                 multiplier = 1.28
-  else if (/kubota|john deere|bobcat/.test(t))          multiplier = 1.25
-  else if (/caterpillar|cat\b|case\b/.test(t))          multiplier = 1.26
-  else if (/tractor/.test(t))                           multiplier = 1.22
-  else if (/mahindra|kioti|new holland/.test(t))        multiplier = 1.20
+  if (/rzr|polaris/.test(t))                            multiplier = 1.18
+  else if (/can-am|canam/.test(t))                      multiplier = 1.16
+  else if (/kawasaki|yamaha|honda utv/.test(t))         multiplier = 1.14
+  else if (/dump trailer/.test(t))                      multiplier = 1.15
+  else if (/equipment trailer|flatbed trailer/.test(t)) multiplier = 1.13
+  else if (/utility trailer/.test(t))                   multiplier = 1.10
+  else if (/skid steer/.test(t))                        multiplier = 1.15
+  else if (/excavator|mini ex/.test(t))                 multiplier = 1.13
+  else if (/kubota|john deere|bobcat/.test(t))          multiplier = 1.12
+  else if (/caterpillar|cat\b|case\b/.test(t))          multiplier = 1.12
+  else if (/tractor/.test(t))                           multiplier = 1.10
+  else if (/mahindra|kioti|new holland/.test(t))        multiplier = 1.08
 
   const currentYear = new Date().getFullYear()
   const age = year ? currentYear - year : 5
