@@ -34,7 +34,8 @@ setTopDeal(data)
       <textarea
         style={{ width: "100%", height: 150 }}
         placeholder="Paste listing..."
-        onChange={(e) => setText(e.target.value)}
+        value={text}
+  onChange={(e) => setText(e.target.value)}
       />
 
       <br /><br />
