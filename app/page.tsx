@@ -57,7 +57,6 @@ function DealCard({ deal, featured }: { deal: any; featured?: boolean }) {
         </div>
       )}
 
-      {/* Underpriced alert */}
       {deal.underpricedAlert && (
         <div style={{
           background: "#EAF3DE", color: "#27500A",
@@ -68,7 +67,6 @@ function DealCard({ deal, featured }: { deal: any; featured?: boolean }) {
         </div>
       )}
 
-      {/* Title + scores */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 12 }}>
         <div style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.4, flex: 1 }}>
           {deal.title}
@@ -79,27 +77,26 @@ function DealCard({ deal, featured }: { deal: any; featured?: boolean }) {
         </div>
       </div>
 
-      {/* Meta */}
-      {(deal.year || deal.hours != null || deal.mileage != null) && (
-        <div style={{ display: "flex", gap: 12, marginBottom: 10, flexWrap: "wrap" }}>
-          {deal.year && <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>{deal.year}</span>}
-          {deal.hours != null && <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>{deal.hours.toLocaleString()} hrs</span>}
-          {deal.mileage != null && <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>{deal.mileage.toLocaleString()} mi</span>}
-          {deal.liquidityLabel && <span style={{ fontSize: 12, color: "#3B6D11" }}>{deal.liquidityLabel}</span>}
-        </div>
-      )}
+      {/* Meta row */}
+      <div style={{ display: "flex", gap: 12, marginBottom: 10, flexWrap: "wrap" }}>
+        {deal.year && <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>{deal.year}</span>}
+        {deal.hours != null && <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>{deal.hours.toLocaleString()} hrs</span>}
+        {deal.mileage != null && <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>{deal.mileage.toLocaleString()} mi</span>}
+        {deal.location && <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>{deal.location}</span>}
+        {deal.liquidityLabel && <span style={{ fontSize: 12, color: "#3B6D11" }}>{deal.liquidityLabel}</span>}
+      </div>
 
       {/* Stats grid */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0,1fr))", gap: 8, marginBottom: 12 }}>
         {[
-          { label: "Asking",    val: fmt(deal.price),               color: "" },
-          { label: "Utah Avg",  val: fmt(deal.estimatedResaleValue), color: "#185FA5" },
-          { label: "Transport", val: fmt(deal.transportCost),        color: "" },
-          { label: "Repairs",   val: fmt(deal.repairCosts),          color: "" },
-          { label: "Offer",     val: fmt(deal.recommendedOffer),     color: "#185FA5" },
-          { label: "MAO",       val: fmt(deal.mao),                  color: "#854F0B" },
-          { label: "Fees (5%)", val: fmt(deal.sellingFees),          color: "" },
-          { label: "Profit",    val: fmt(deal.estimatedProfit),
+          { label: "Asking",       val: fmt(deal.price),               color: "" },
+          { label: "Utah Value",   val: fmt(deal.estimatedResaleValue), color: "#185FA5" },
+          { label: "Transport",    val: fmt(deal.transportCost),        color: "" },
+          { label: "Repairs",      val: fmt(deal.repairCosts),          color: "" },
+          { label: "Offer",        val: fmt(deal.recommendedOffer),     color: "#185FA5" },
+          { label: "MAO",          val: fmt(deal.mao),                  color: "#854F0B" },
+          { label: "Fees (5%)",    val: fmt(deal.sellingFees),          color: "" },
+          { label: "Profit",       val: fmt(deal.estimatedProfit),
             color: deal.estimatedProfit > 2000 ? "#27500A" : deal.estimatedProfit > 1000 ? "#854F0B" : "#A32D2D" },
         ].map(({ label, val, color }) => (
           <div key={label} style={{
@@ -163,7 +160,6 @@ function DealCard({ deal, featured }: { deal: any; featured?: boolean }) {
         </div>
       )}
 
-      {/* Offer message button */}
       <button
         onClick={copyOffer}
         style={{
@@ -182,7 +178,7 @@ function DealCard({ deal, featured }: { deal: any; featured?: boolean }) {
         <a href={deal.url} target="_blank" rel="noreferrer" style={{
           display: "block", fontSize: 12, color: "#185FA5", textDecoration: "none",
         }}>
-          View listing →
+          View listing on KSL →
         </a>
       )}
     </div>
@@ -191,13 +187,9 @@ function DealCard({ deal, featured }: { deal: any; featured?: boolean }) {
 
 export default function Home() {
   const [query, setQuery] = useState("")
-  const [buyRegion, setBuyRegion] = useState("")
-  const [city, setCity] = useState("")
-  const [radius, setRadius] = useState("100")
   const [deals, setDeals] = useState<any[]>([])
   const [topDeal, setTopDeal] = useState<any>(null)
   const [utahComps, setUtahComps] = useState<any>(null)
-  const [transportCost, setTransportCost] = useState<number>(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
 
@@ -213,7 +205,7 @@ export default function Home() {
       const searchRes = await fetch("/api/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query, buyRegion, city, radius: parseInt(radius) }),
+        body: JSON.stringify({ query }),
       })
       const searchData = await searchRes.json()
 
@@ -224,7 +216,6 @@ export default function Home() {
       }
 
       setUtahComps(searchData.utahComps)
-      setTransportCost(searchData.transportCost || 0)
 
       const analyzeRes = await fetch("/api/analyzeDeals", {
         method: "POST",
@@ -253,43 +244,20 @@ export default function Home() {
         <p style={{ fontSize: 13, color: "#888780", margin: 0 }}>UTVs · Trailers · Skid steers · Farm equipment</p>
       </div>
 
-      {/* Search inputs */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
         <input
           type="text"
-          placeholder="Equipment (e.g. rzr 1000)"
+          placeholder="What are you looking for? (e.g. rzr 1000)"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && analyze()}
+          style={{ flex: 1 }}
         />
-        <input
-          type="text"
-          placeholder="Buy region (e.g. Wyoming, Midwest, Texas)"
-          value={buyRegion}
-          onChange={(e) => setBuyRegion(e.target.value)}
-        />
-        <div style={{ display: "flex", gap: 8 }}>
-          <input
-            type="text"
-            placeholder="City (optional)"
-            value={city}
-            onChange={(e) => setCity(e.target.value)}
-            style={{ flex: 2 }}
-          />
-          <input
-            type="number"
-            placeholder="Radius mi"
-            value={radius}
-            onChange={(e) => setRadius(e.target.value)}
-            style={{ flex: 1 }}
-          />
-        </div>
         <button onClick={analyze} disabled={loading} style={{ opacity: loading ? 0.6 : 1 }}>
           {loading ? "Searching..." : "Search"}
         </button>
       </div>
 
-      {/* Utah market snapshot */}
       {utahComps && utahComps.avg > 0 && (
         <div style={{
           background: "var(--color-background-primary)",
@@ -297,11 +265,11 @@ export default function Home() {
           borderRadius: 12, padding: "12px 16px", marginBottom: 16,
         }}>
           <div style={{ fontSize: 11, color: "#888780", marginBottom: 6, fontWeight: 500 }}>
-            UTAH MARKET · {query.toUpperCase()}
+            KSL UTAH MARKET · {query.toUpperCase()}
           </div>
           <div style={{ display: "flex", gap: 16 }}>
             <div>
-              <div style={{ fontSize: 11, color: "#888780" }}>Avg sell</div>
+              <div style={{ fontSize: 11, color: "#888780" }}>Avg</div>
               <div style={{ fontSize: 16, fontWeight: 500 }}>{fmt(utahComps.avg)}</div>
             </div>
             <div>
@@ -317,11 +285,6 @@ export default function Home() {
               <div style={{ fontSize: 16, fontWeight: 500 }}>{utahComps.samples}</div>
             </div>
           </div>
-          {transportCost > 0 && (
-            <div style={{ fontSize: 12, color: "#888780", marginTop: 6 }}>
-              Transport to Utah: {fmt(transportCost)}
-            </div>
-          )}
         </div>
       )}
 
