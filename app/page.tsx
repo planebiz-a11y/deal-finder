@@ -20,6 +20,10 @@ body: JSON.stringify({ text }),
     const data = await res.json()
 
     setResult(data)
+
+// NEW
+setDeals([data])
+setTopDeal(data)
   }
 
   return (
