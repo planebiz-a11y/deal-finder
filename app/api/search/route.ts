@@ -36,8 +36,8 @@ export async function POST(req: Request) {
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-opus-4-5",
-        max_tokens: 5000,
+        model: "claude-sonnet-4-6",
+        max_tokens: 3000,
         tools: [{ type: "web_search_20250305", name: "web_search" }],
         messages: [
           {
