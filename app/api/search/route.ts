@@ -103,6 +103,7 @@ export async function POST(req: Request) {
         const snippet = (item.snippet || "").toLowerCase()
         const combined = `${title} ${snippet}`
         if (/wanted|looking for|guide|review|parts only/.test(title)) return false
+        if (/fresh on the lot|new arrival|dealer|dealership|financing available|msrp/.test(title.toLowerCase() + " " + (item.snippet || "").toLowerCase())) return false
         if (!combined.includes("$")) return false
         return queryWords.some((w: string) => title.includes(w.toLowerCase()))
       })
