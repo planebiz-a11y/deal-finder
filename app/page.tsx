@@ -86,7 +86,19 @@ const [topDeal, setTopDeal] = useState<any>(null)
   </div>
 )}
 
-{result && (
+{topDeal && (
+  <div style={{ marginTop: 20, border: "3px solid green", padding: 15 }}>
+    <h2>🔥 BEST DEAL</h2>
+    <p><strong>{topDeal.title}</strong></p>
+    <p>Score: {topDeal.dealScore}</p>
+    <p>MAO: ${topDeal.safeMAO}</p>
+    <p>Profit: ${topDeal.estimatedProfitAtRecommendedOffer}</p>
+    {topDeal.link && (
+      <a href={topDeal.link} target="_blank">View Listing</a>
+    )}
+  </div>
+)}
+      {result && (
         <div style={{ marginTop: 20 }}>
           <h2>{result.dealRating} — Score {result.dealScore}</h2>
 
