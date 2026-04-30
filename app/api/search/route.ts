@@ -44,38 +44,14 @@ export async function POST(req: Request) {
             role: "user",
             content: `You are a buying intelligence system for an equipment flipper based in Utah.
 
-TASK 1: Search KSL.com and Facebook Marketplace for "${query}" currently for sale in Utah. Find 5-10 real listings. Extract real asking prices only. Do NOT include MachineryTrader or dealer listings.
+Search KSL.com and Facebook Marketplace for "${query}" in Utah. Find private seller prices only, no dealers.
 
-TASK 2: Search Craigslist and Facebook Marketplace for "${query}" for sale ${locationFilter}. Find 5-10 real current private seller listings outside Utah.
+Then search Craigslist and Facebook Marketplace for "${query}" in ${locationFilter}. Find private seller listings only.
 
-For each buy listing also detect:
-- seller pressure signals: "need gone", "moving", "make offer", "OBO", "price reduced", "motivated"
-- how long it has been listed if mentioned
-- any price drop mentioned
+Respond with ONLY this JSON — no other text, no markdown, just the JSON object:
+{"utahComps":{"avg":11000,"low":8500,"high":14000,"samples":6,"priceList":[8500,9500,11000,12000,13500,14000]},"listings":[{"title":"2019 Polaris RZR XP 1000","price":8900,"description":"runs great low miles","url":"https://craigslist.org/abc","location":"Casper WY","daysListed":5,"previousPrice":null,"sellerPressure":false,"pressureSignals":[]}]}
 
-CRITICAL: Your entire response must be ONLY the JSON object below. Start your response with { and end with }. No text before or after. No explanation. No "Based on my search". Just the raw JSON:
-{
-  "utahComps": {
-    "avg": number,
-    "low": number,
-    "high": number,
-    "samples": number,
-    "priceList": [number]
-  },
-  "listings": [
-    {
-      "title": string,
-      "price": number,
-      "description": string,
-      "url": string,
-      "location": string,
-      "daysListed": number or null,
-      "previousPrice": number or null,
-      "sellerPressure": boolean,
-      "pressureSignals": [string]
-    }
-  ]
-}`
+Replace the example values with real data you find. Keep exact same JSON structure.`
           }
         ]
       })
@@ -92,11 +68,12 @@ CRITICAL: Your entire response must be ONLY the JSON object below. Start your re
       .map((b: any) => b.text)
       .join("")
 
+    // Try to extract JSON from response
     const jsonMatch = allText.match(/\{[\s\S]*\}/)
     if (!jsonMatch) {
       return Response.json({
         error: "No JSON found",
-        allText: allText.slice(0, 3000),
+        allText: allText.slice(0, 2000),
       }, { status: 500 })
     }
 
@@ -104,7 +81,17 @@ CRITICAL: Your entire response must be ONLY the JSON object below. Start your re
     try {
       result = JSON.parse(jsonMatch[0])
     } catch {
-      return Response.json({ error: "Failed to parse response" }, { status: 500 })
+      // Try to find just the outer object if nested JSON is malformed
+      const lines = jsonMatch[0].split('\n')
+      const cleaned = lines.filter((l: string) => !l.trim().startsWith('//') && !l.trim().startsWith('*')).join('\n')
+      try {
+        result = JSON.parse(cleaned)
+      } catch {
+        return Response.json({
+          error: "Failed to parse response",
+          raw: jsonMatch[0].slice(0, 1000),
+        }, { status: 500 })
+      }
     }
 
     const utahComps = result.utahComps || { avg: 0, low: 0, high: 0, samples: 0, priceList: [] }
@@ -113,7 +100,7 @@ CRITICAL: Your entire response must be ONLY the JSON object below. Start your re
     let spreadScore = 0
     if (priceList.length > 1) {
       const spread = utahComps.high - utahComps.low
-      const spreadPct = spread / utahComps.avg
+      const spreadPct = spread / (utahComps.avg || 1)
       spreadScore = spreadPct < 0.2 ? 100 : spreadPct < 0.4 ? 70 : spreadPct < 0.6 ? 40 : 20
     }
 
