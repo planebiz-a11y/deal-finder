@@ -90,5 +90,12 @@ Return this JSON structure:
     )
   }
 
+  try {
   return Response.json(JSON.parse(content))
+} catch (err) {
+  return Response.json(
+    { error: "Invalid JSON returned from AI", raw: content },
+    { status: 500 }
+  )
+}
 }
