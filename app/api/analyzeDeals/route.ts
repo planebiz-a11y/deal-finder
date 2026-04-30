@@ -102,8 +102,6 @@ function resolveAll(listing: Listing): ExtractedData {
   return { price, year, hours, mileage, condition }
 }
 
-// Hardcoded Utah sell prices from real KSL + Facebook research
-// Never uses scraped comps — too unreliable
 function getUtahResaleValue(
   title: string,
   year: number | null,
@@ -116,15 +114,17 @@ function getUtahResaleValue(
   let base = 0
 
   if (/rzr|polaris rzr/.test(t)) {
-    if (age <= 2)       base = 20000
-    else if (age <= 4)  base = 16000
-    else if (age <= 7)  base = 10500
-    else if (age <= 10) base = 8500
+    if (age <= 1)       base = 28000
+    else if (age <= 3)  base = 22000
+    else if (age <= 5)  base = 17000
+    else if (age <= 8)  base = 12000
+    else if (age <= 12) base = 9000
     else                base = 6500
   } else if (/can-am|canam/.test(t)) {
-    if (age <= 2)       base = 18000
-    else if (age <= 4)  base = 14000
-    else if (age <= 7)  base = 10000
+    if (age <= 1)       base = 26000
+    else if (age <= 3)  base = 20000
+    else if (age <= 5)  base = 15000
+    else if (age <= 8)  base = 11000
     else                base = 7000
   } else if (/dump trailer/.test(t)) {
     base = 6800
@@ -172,7 +172,7 @@ function estimateCosts(
   hours: number | null
 ): number {
   const text = `${title} ${description}`.toLowerCase()
-  let cost = 400
+  let cost = 200 // base: time + listing fee
   if (condition.notRunning)     cost += 2800
   else if (condition.needsWork) cost += 1200
   if (condition.salvage)        cost += 1800
@@ -261,6 +261,27 @@ function getNegotiationStrategy(
   }
 }
 
+function getSeasonalityBonus(title: string): number {
+  const t = title.toLowerCase()
+  const month = new Date().getMonth()
+  const isUTV = /rzr|can-am|polaris|utv|atv/.test(t)
+  const isTrailer = /trailer/.test(t)
+  const isHeavy = /skid steer|excavator|kubota|tractor|bobcat/.test(t)
+
+  if (isUTV) {
+    if (month >= 2 && month <= 7) return 1
+    if (month >= 10 || month <= 0) return -1
+  }
+  if (isTrailer) {
+    if (month >= 2 && month <= 5) return 1
+  }
+  if (isHeavy) {
+    if (month >= 2 && month <= 9) return 1
+    if (month >= 11 || month <= 1) return -1
+  }
+  return 0
+}
+
 function getConfidenceScore(
   utahSamples: number,
   spreadScore: number,
@@ -285,10 +306,7 @@ function getConfidenceScore(
   return Math.min(100, Math.max(0, score))
 }
 
-function getLiquidityScore(
-  title: string,
-  utahSamples: number,
-): { score: number; label: string } {
+function getLiquidityScore(title: string, utahSamples: number): { score: number; label: string } {
   const t = title.toLowerCase()
   let score = 50
   if (/rzr|polaris|can-am/.test(t))    score += 30
@@ -305,20 +323,17 @@ function getLiquidityScore(
   return { score: final, label }
 }
 
-function getUnderpricedAlert(
-  price: number,
-  resaleValue: number,
-): string | null {
+function getUnderpricedAlert(price: number, resaleValue: number): string | null {
   if (!resaleValue || !price) return null
   const gap = resaleValue - price
   if (gap <= 0) return null
   const pct = Math.round((gap / resaleValue) * 100)
-  if (pct >= 30) return `🔥 ${pct}% under Utah market value — move fast`
-  if (pct >= 15) return `⚡ $${gap.toLocaleString()} under Utah market value`
+  if (pct >= 30) return `🔥 ${pct}% under market — move fast`
+  if (pct >= 15) return `⚡ $${gap.toLocaleString()} under market value`
   return null
 }
 
-function scoreDeal(profit: number, price: number, riskFlags: string[]): number {
+function scoreDeal(profit: number, price: number, riskFlags: string[], title: string): number {
   if (!price || price < 200) return 0
   const roi = profit / price
   let score = 5
@@ -334,6 +349,7 @@ function scoreDeal(profit: number, price: number, riskFlags: string[]): number {
   ).length
   score -= hardRiskCount * 0.75
   if (riskFlags.includes("Limited info — ask seller")) score -= 0.25
+  score += getSeasonalityBonus(title)
   return Math.max(1, Math.min(10, Math.round(score)))
 }
 
@@ -357,25 +373,25 @@ export async function POST(req: Request) {
 
         if (!price || price < 200) return null
 
-        const utahLow    = listing.utahLow    || 0
+        const utahAvg     = listing.utahAvg    || 0
+        const utahLow     = listing.utahLow    || 0
         const utahSamples = listing.utahSamples || 0
         const spreadScore = listing.spreadScore || 0
-        const transportCost = listing.transportCost || 0
+        const transportCost = listing.transportCost || 50
 
-        // Always use hardcoded table — no scraped comps
+        // Use KSL avg if available, else hardcoded table
         const tableResale = getUtahResaleValue(title, year, condition, hours)
-
-        // Cap resale at 35% above asking — never assume massive markup
-        const estimatedResaleValue = tableResale > 0
+        const estimatedResaleValue = utahAvg > 0
+          ? utahAvg
+          : tableResale > 0
           ? Math.min(tableResale, Math.round(price * 1.35))
           : Math.round(price * 1.15)
 
         const repairCosts = estimateCosts(condition, title, description, hours)
-        const sellingFees = Math.round(estimatedResaleValue * 0.05)
+        const sellingFees = Math.round(estimatedResaleValue * 0.03) // KSL fee ~3%
         const totalCosts  = repairCosts + transportCost + sellingFees
         const estimatedProfit = estimatedResaleValue - price - totalCosts
 
-        // MAO and offer are always BELOW asking price
         const mao = Math.min(
           Math.round(estimatedResaleValue - totalCosts - 1500),
           Math.round(price * 0.92)
@@ -389,7 +405,7 @@ export async function POST(req: Request) {
 
         const riskFlags   = getRiskFlags(condition, title, description, year, hours, mileage)
         const sellerFlags = getSellerFlags(listing)
-        const dealScore   = scoreDeal(estimatedProfit, price, riskFlags)
+        const dealScore   = scoreDeal(estimatedProfit, price, riskFlags, title)
         const confidenceScore = getConfidenceScore(utahSamples, spreadScore, riskFlags, estimatedProfit, price)
         const liquidity   = getLiquidityScore(title, utahSamples)
         const underpricedAlert = getUnderpricedAlert(price, estimatedResaleValue)
