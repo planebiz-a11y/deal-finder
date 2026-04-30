@@ -12,8 +12,9 @@ export async function POST(req: Request) {
       return Response.json({ error: "Missing ANTHROPIC_API_KEY" }, { status: 500 })
     }
 
-    // Step 1 — Get Utah comps (sell side)
-    const compsResponse = await fetch("https://api.anthropic.com/v1/messages", {
+    const region = buyRegion || "anywhere in the US outside Utah"
+
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -22,78 +23,73 @@ export async function POST(req: Request) {
       },
       body: JSON.stringify({
         model: "claude-opus-4-5",
-        max_tokens: 1000,
+        max_tokens: 3000,
         tools: [{ type: "web_search_20250305", name: "web_search" }],
         messages: [
           {
             role: "user",
-            content: `Search KSL.com and Craigslist Salt Lake City for current listings of "${query}" for sale in Utah. Find 5-10 real current listings. Return ONLY a raw JSON object with this shape, no explanation, no markdown:
-{"utahAvgPrice": number, "utahLowPrice": number, "utahHighPrice": number, "sampleCount": number}
-Base it on real asking prices you find. Numbers only, no $ signs.`
+            content: `You are a buying intelligence system for an equipment flipper based in Utah.
+
+Do two things in one response:
+
+1. Search KSL.com for "${query}" currently for sale in Utah. Get real asking prices to establish the Utah sell market.
+
+2. Search Craigslist and Facebook Marketplace for "${query}" for sale in ${region}. Find real current listings outside Utah to buy from.
+
+Return ONLY this raw JSON object, no explanation, no markdown, no code fences:
+
+{
+  "utahAvgPrice": number,
+  "utahLowPrice": number, 
+  "utahHighPrice": number,
+  "listings": [
+    {
+      "title": string,
+      "price": number,
+      "description": string,
+      "url": string,
+      "location": string
+    }
+  ]
+}
+
+All prices are numbers only, no $ signs. listings should have 5-10 real results from the buy region.`
           }
         ]
       })
     })
 
-    const compsData = await compsResponse.json()
-    const compsText = compsData.content?.find((b: any) => b.type === "text")?.text || ""
-    const compsClean = compsText.replace(/```json|```/g, "").trim()
+    const data = await response.json()
 
-    let utahComps = { utahAvgPrice: 0, utahLowPrice: 0, utahHighPrice: 0, sampleCount: 0 }
-    try {
-      utahComps = JSON.parse(compsClean)
-    } catch {
-      // comps failed, continue without them
+    if (data.error) {
+      return Response.json({ error: data.error.message }, { status: 500 })
     }
 
-    // Step 2 — Search buy region
-    const region = buyRegion || "nationwide"
-    const searchResponse = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-opus-4-5",
-        max_tokens: 2000,
-        tools: [{ type: "web_search_20250305", name: "web_search" }],
-        messages: [
-          {
-            role: "user",
-            content: `Search Craigslist, Facebook Marketplace, and local listing sites for "${query}" for sale in ${region}. Find real current for-sale listings outside of Utah. Return ONLY a raw JSON array, no explanation, no markdown, no code fences. Each object must have:
-- title: string
-- price: number (digits only, no $ sign)
-- description: string (condition, hours, mileage, any issues mentioned)
-- url: string (actual listing URL)
-- location: string (city and state)`
-          }
-        ]
-      })
-    })
+    const textBlock = data.content?.find((b: any) => b.type === "text")?.text || ""
+    const cleaned = textBlock.replace(/```json|```/g, "").trim()
 
-    const searchData = await searchResponse.json()
-    const searchText = searchData.content?.find((b: any) => b.type === "text")?.text || ""
-    const searchClean = searchText.replace(/```json|```/g, "").trim()
-
-    let listings: any[] = []
+    let result: any = {}
     try {
-      listings = JSON.parse(searchClean)
-      if (!Array.isArray(listings)) listings = []
+      result = JSON.parse(cleaned)
     } catch {
-      return Response.json({ error: "Failed to parse listings" }, { status: 500 })
+      return Response.json({ error: "Failed to parse response" }, { status: 500 })
     }
 
-    // Attach Utah comps to each listing so analyzer can use them
-    listings = listings.map((l: any) => ({
+    const listings = (result.listings || []).map((l: any) => ({
       ...l,
-      utahAvgPrice: utahComps.utahAvgPrice,
-      utahLowPrice: utahComps.utahLowPrice,
-      utahHighPrice: utahComps.utahHighPrice,
+      utahAvgPrice: result.utahAvgPrice || 0,
+      utahLowPrice: result.utahLowPrice || 0,
+      utahHighPrice: result.utahHighPrice || 0,
     }))
 
-    return Response.json({ listings, utahComps })
+    return Response.json({
+      listings,
+      utahComps: {
+        utahAvgPrice: result.utahAvgPrice || 0,
+        utahLowPrice: result.utahLowPrice || 0,
+        utahHighPrice: result.utahHighPrice || 0,
+      }
+    })
 
   } catch (err) {
     return Response.json({ error: "Search failed" }, { status: 500 })
