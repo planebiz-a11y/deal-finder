@@ -127,6 +127,7 @@ function DealCard({ deal, featured }: { deal: any; featured?: boolean }) {
 
 export default function Home() {
   const [query, setQuery] = useState("")
+  const [buyRegion, setBuyRegion] = useState("")
   const [deals, setDeals] = useState<any[]>([])
   const [topDeal, setTopDeal] = useState<any>(null)
   const [loading, setLoading] = useState(false)
