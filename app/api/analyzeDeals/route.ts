@@ -243,7 +243,7 @@ export async function POST(req: Request) {
         const title = listing.title || "Untitled listing"
         const description = listing.description || ""
         const { price, year, hours, mileage, condition } = resolveAll(listing)
-        const estimatedResaleValue = estimateResaleValue(title, price, condition, year, hours, mileage)
+        const estimatedResaleValue = (listing as any).utahAvgPrice || estimateResaleValue(title, price, condition, year, hours, mileage)
         const estimatedCosts = estimateCosts(condition, title, description, hours)
         const estimatedProfit = estimatedResaleValue - price - estimatedCosts
         const mao = Math.round((estimatedResaleValue - estimatedCosts) * 0.7)
