@@ -247,7 +247,8 @@ export async function POST(req: Request) {
         const transportCost = (listing as any).transportCost || 0
         const estimatedCosts = estimateCosts(condition, title, description, hours) + transportCost
         const estimatedProfit = estimatedResaleValue - price - estimatedCosts
-        const mao = Math.round((estimatedResaleValue - estimatedCosts) * 0.7)
+        const sellingFees = Math.round(estimatedResaleValue * 0.05)
+        const mao = Math.round(estimatedResaleValue - estimatedCosts - sellingFees - 1500)
         const riskFlags = getRiskFlags(condition, title, description, year, hours, mileage, price)
         const dealScore = scoreDeal(estimatedProfit, price, riskFlags)
 
