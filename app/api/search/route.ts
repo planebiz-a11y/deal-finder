@@ -10,41 +10,6 @@ function estimateTransport(r: string): number {
   return 800
 }
 
-// Maps region/city input to Craigslist site codes
-function getCraigslistSite(region: string, city: string): string {
-  const s = `${region} ${city}`.toLowerCase()
-  if (/wyoming|cheyenne|casper/.test(s))          return "wyoming"
-  if (/idaho|boise|pocatello/.test(s))            return "boise"
-  if (/montana|billings|missoula/.test(s))        return "montana"
-  if (/nevada|reno|lasvegas|las vegas/.test(s))   return "reno"
-  if (/colorado|denver|colorado springs/.test(s)) return "denver"
-  if (/arizona|phoenix|tucson/.test(s))           return "phoenix"
-  if (/oregon|portland|eugene/.test(s))           return "portland"
-  if (/washington|seattle|spokane/.test(s))       return "seattle"
-  if (/california|sacramento|fresno/.test(s))     return "sacramento"
-  if (/texas|dallas|houston|austin/.test(s))      return "dallas"
-  if (/kansas|wichita/.test(s))                   return "wichita"
-  if (/nebraska|omaha/.test(s))                   return "omaha"
-  if (/iowa|des moines/.test(s))                  return "desmoines"
-  if (/missouri|kansas city|st louis/.test(s))    return "kansascity"
-  if (/illinois|chicago/.test(s))                 return "chicago"
-  if (/indiana|indianapolis/.test(s))             return "indianapolis"
-  if (/ohio|columbus|cleveland/.test(s))          return "cleveland"
-  if (/minnesota|minneapolis/.test(s))            return "minneapolis"
-  if (/wisconsin|milwaukee/.test(s))              return "milwaukee"
-  if (/michigan|detroit/.test(s))                 return "detroit"
-  if (/north dakota|bismarck/.test(s))            return "bismarck"
-  if (/south dakota|sioux falls/.test(s))         return "siouxfalls"
-  if (/georgia|atlanta/.test(s))                  return "atlanta"
-  if (/florida|orlando|miami|tampa/.test(s))      return "orlando"
-  if (/tennessee|nashville/.test(s))              return "nashville"
-  if (/alabama|birmingham/.test(s))               return "birmingham"
-  if (/new york|nyc/.test(s))                     return "newyork"
-  if (/pennsylvania|philadelphia|pittsburgh/.test(s)) return "philadelphia"
-  if (/virginia|richmond/.test(s))                return "richmond"
-  return "denver" // default
-}
-
 function extractPriceFromText(text: string): number {
   if (!text) return 0
   const matches = text.match(/\$[\d,]+/g)
@@ -70,7 +35,7 @@ function detectSellerPressure(text: string): { sellerPressure: boolean; pressure
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const { query, buyRegion, city, radius } = body
+    const { query, buyRegion, city } = body
 
     if (!query) {
       return Response.json({ error: "Missing search query" }, { status: 400 })
@@ -81,11 +46,11 @@ export async function POST(req: Request) {
       return Response.json({ error: "Missing SERPAPI_KEY" }, { status: 500 })
     }
 
-    const region = buyRegion || "denver"
+    const region = buyRegion || "US"
     const transportCost = estimateTransport(region)
-    const clSite = getCraigslistSite(region, city || "")
+    const queryWords = query.toLowerCase().split(" ").filter((w: string) => w.length > 2)
 
-    // Search 1 — Utah comps via KSL Google search
+    // Search 1 — Utah comps via KSL
     const utahQuery = `${query} for sale by owner site:ksl.com -dealer -dealership`
     const utahUrl = `https://serpapi.com/search.json?engine=google&q=${encodeURIComponent(utahQuery)}&api_key=${serpKey}`
     const utahRes = await fetch(utahUrl)
@@ -116,51 +81,24 @@ export async function POST(req: Request) {
       spreadScore = spreadPct < 0.2 ? 100 : spreadPct < 0.4 ? 70 : spreadPct < 0.6 ? 40 : 20
     }
 
-    // Search 2 — Direct Craigslist fetch
-    const clSiteDomain = `${clSite}.craigslist.org`
-    const clSearchUrl = `https://${clSiteDomain}/search/sss?query=${encodeURIComponent(query)}&sort=date`
-    const buyRes = await fetch(clSearchUrl, {
-      headers: { "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" }
-    })
-    const html = await buyRes.text()
-
-    // Parse Craigslist HTML results
-    const listingMatches = html.matchAll(/<li class="cl-search-result[^"]*"[\s\S]*?<\/li>/g)
-    const clListings: any[] = []
-
-    for (const match of listingMatches) {
-      const block = match[0]
-      const titleMatch = block.match(/class="posting-title"[^>]*>[\s\S]*?<span[^>]*>([^<]+)<\/span>/)
-      const priceMatch = block.match(/class="priceinfo"[^>]*>\$?([\d,]+)/)
-      const urlMatch = block.match(/href="(https?:\/\/[^"]+)"/)
-
-      const title = titleMatch?.[1]?.trim() || ""
-      const price = priceMatch ? Number(priceMatch[1].replace(/,/g, "")) : 0
-      const url = urlMatch?.[1] || ""
-
-      if (title && price > 200) {
-        clListings.push({ title, price, url })
-      }
-    }
-
-    const buyData = { organic_results: clListings.map(l => ({
-      title: l.title,
-      snippet: `$${l.price}`,
-      link: l.url,
-    }))}
+    // Search 2 — Buy region via Google + Craigslist
+    const locationStr = city ? `${city} ${region}` : region
+    const buyQuery = `${query} for sale ${locationStr} site:craigslist.org -wanted -"looking for"`
+    const buyUrl = `https://serpapi.com/search.json?engine=google&q=${encodeURIComponent(buyQuery)}&num=20&api_key=${serpKey}`
+    const buyRes = await fetch(buyUrl)
+    const buyData = await buyRes.json()
 
     const listings = (buyData.organic_results || [])
-      .slice(0, 20)
+      .slice(0, 25)
       .filter((item: any) => {
         const title = (item.title || "").toLowerCase()
         const snippet = (item.snippet || "").toLowerCase()
         const combined = `${title} ${snippet}`
+        if (/wanted|looking for|guide|review|parts only/.test(title)) return false
         if (!combined.includes("$")) return false
-        if (/wanted|looking for|guide|review/.test(title)) return false
-        // Must match at least one query word
-        const queryWords = query.toLowerCase().split(" ").filter((w: string) => w.length > 2)
         return queryWords.some((w: string) => combined.includes(w))
       })
+      .slice(0, 15)
       .map((item: any) => {
         const title = item.title || ""
         const description = item.snippet || ""
