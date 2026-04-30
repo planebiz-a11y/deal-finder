@@ -53,7 +53,7 @@ export async function POST(req: Request) {
     const JUNK = ["wanted", "looking for", "guide", "review", "dealer", "for parts", "insurance", "how to"]
 
     // Search 1 — Utah comps (KSL + Facebook Utah)
-    const utahQuery = `${query} for sale utah site:ksl.com OR site:facebook.com/marketplace`
+    const utahQuery = `${query} for sale by owner utah site:ksl.com OR site:facebook.com/marketplace -dealer -dealership`
     const utahUrl = `https://serpapi.com/search.json?engine=google&q=${encodeURIComponent(utahQuery)}&api_key=${serpKey}`
     const utahRes = await fetch(utahUrl)
     const utahData = await utahRes.json()
