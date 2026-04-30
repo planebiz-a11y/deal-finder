@@ -10,22 +10,39 @@ const [topDeal, setTopDeal] = useState<any>(null)
 
   async function analyze() {
   if (!text.trim()) return
-    const res = await fetch("/api/parse", {
-      method: "POST",
-      headers: {
-  "Content-Type": "application/json",
-},
-body: JSON.stringify({ text }),
-    })
 
-    const data = await res.json()
+  // 🔍 1. SEARCH
+  const searchRes = await fetch("/api/search", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ query: text }),
+  })
 
-    setResult(data)
+  const searchData = await searchRes.json()
 
-// NEW
-setDeals([data])
-setTopDeal(data)
+  if (!searchData?.listings?.length) {
+    alert("No listings found")
+    return
   }
+
+  // 🧠 2. ANALYZE
+  const analyzeRes = await fetch("/api/analyzeDeals", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ listings: searchData.listings }),
+  })
+
+  const data = await analyzeRes.json()
+
+  // 🏆 RESULTS
+  setDeals(data.deals || [])
+  setTopDeal(data.topDeal || null)
+  setResult(data.topDeal || null)
+}
 
   return (
     <div style={{ padding: 20 }}>
