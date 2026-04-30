@@ -8,32 +8,27 @@ export default function Home() {
   const [topDeal, setTopDeal] = useState<any>(null)
 
   async function analyze() {
-    if (!text.trim()) return
+  if (!text.trim()) return
 
-    const searchRes = await fetch("/api/search", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query: text }),
-    })
-
-    const searchData = await searchRes.json()
-
-    if (!searchData?.listings?.length) {
-      alert("No listings found")
-      return
-    }
-
-    const analyzeRes = await fetch("/api/analyzeDeals", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ listings: searchData.listings }),
-    })
-
-    const data = await analyzeRes.json()
-
-    setDeals(data.deals || [])
-    setTopDeal(data.topDeal || null)
+  const searchData = {
+    listings: [
+      { title: "2018 RZR 1000", price: 8500 },
+      { title: "Dump trailer", price: 4000 },
+      { title: "Kubota excavator needs work", price: 12000 }
+    ]
   }
+
+  const analyzeRes = await fetch("/api/analyzeDeals", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ listings: searchData.listings }),
+  })
+
+  const data = await analyzeRes.json()
+
+  setDeals(data.deals || [])
+  setTopDeal(data.topDeal || null)
+}
 
   return (
     <div style={{ padding: 20 }}>
