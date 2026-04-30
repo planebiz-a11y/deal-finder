@@ -5,6 +5,8 @@ import { useState } from "react"
 export default function Home() {
   const [text, setText] = useState("")
   const [result, setResult] = useState<any>(null)
+const [deals, setDeals] = useState<any[]>([])
+const [topDeal, setTopDeal] = useState<any>(null)
 
   async function analyze() {
     const res = await fetch("/api/parse", {
