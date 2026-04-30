@@ -29,7 +29,29 @@ export async function POST(req: Request) {
     const data = await res.json()
 
     const listings =
-      data.organic_results?.slice(0, 8).map((item: any) => ({
+  data.organic_results
+    ?.filter((item: any) => {
+      const title = (item.title || "").toLowerCase()
+      const snippet = (item.snippet || "").toLowerCase()
+
+      // ❌ filter junk
+      if (title.includes("wanted")) return false
+      if (title.includes("looking for")) return false
+      if (title.includes("guide")) return false
+      if (title.includes("review")) return false
+      if (title.includes("dealer")) return false
+
+      // ❌ must have price signal
+      if (!snippet.includes("$") && !title.includes("$")) return false
+
+      return true
+    })
+    .slice(0, 8)
+    .map((item: any) => ({
+      title: item.title || "",
+      description: item.snippet || "",
+      url: item.link || "",
+    })) || []
         title: item.title || "",
         description: item.snippet || "",
         url: item.link || "",
