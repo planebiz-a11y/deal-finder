@@ -195,11 +195,18 @@ export default function Home() {
       <div style={{ display: "flex", gap: 8, marginBottom: 24 }}>
         <input
           type="text"
-          placeholder="rzr 1000 utah..."
+          placeholder="rzr 1000..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKey}
           style={{ flex: 1 }}
+        />
+        <input
+          type="text"
+          placeholder="Buy region (e.g. Wyoming, Texas...)"
+          value={buyRegion}
+          onChange={(e) => setBuyRegion(e.target.value)}
+          style={{ flex: 1, marginTop: 8 }}
         />
         <button
           onClick={analyze}
