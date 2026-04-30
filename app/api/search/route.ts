@@ -1,3 +1,15 @@
+function estimateTransport(r: string): number {
+  const s = r.toLowerCase()
+  if (/wyoming|idaho|nevada|colorado|arizona/.test(s))       return 300
+  if (/california|oregon|washington|montana/.test(s))        return 600
+  if (/texas|new mexico|kansas|nebraska/.test(s))            return 800
+  if (/midwest|iowa|missouri|illinois|indiana|ohio/.test(s)) return 1000
+  if (/minnesota|wisconsin|michigan|dakota/.test(s))         return 1100
+  if (/southeast|georgia|florida|alabama|tennessee/.test(s)) return 1200
+  if (/northeast|new york|pennsylvania|virginia/.test(s))    return 1400
+  return 800
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json()
@@ -10,19 +22,6 @@ export async function POST(req: Request) {
     const apiKey = process.env.ANTHROPIC_API_KEY
     if (!apiKey) {
       return Response.json({ error: "Missing ANTHROPIC_API_KEY" }, { status: 500 })
-    }
-
-    // Transport cost by region
-    function estimateTransport(r: string): number {
-      const s = r.toLowerCase()
-      if (/wyoming|idaho|nevada|colorado|arizona/.test(s))       return 300
-      if (/california|oregon|washington|montana/.test(s))        return 600
-      if (/texas|new mexico|kansas|nebraska/.test(s))            return 800
-      if (/midwest|iowa|missouri|illinois|indiana|ohio/.test(s)) return 1000
-      if (/minnesota|wisconsin|michigan|dakota/.test(s))         return 1100
-      if (/southeast|georgia|florida|alabama|tennessee/.test(s)) return 1200
-      if (/northeast|new york|pennsylvania|virginia/.test(s))    return 1400
-      return 800
     }
 
     const region = buyRegion || "anywhere in the US outside Utah"
@@ -110,7 +109,6 @@ Return ONLY this raw JSON, no explanation, no markdown, no code fences:
 
     const utahComps = result.utahComps || { avg: 0, low: 0, high: 0, samples: 0, priceList: [] }
 
-    // Calculate spread consistency — tighter spread = higher confidence
     const priceList: number[] = utahComps.priceList || []
     let spreadScore = 0
     if (priceList.length > 1) {
