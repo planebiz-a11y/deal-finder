@@ -14,20 +14,7 @@ export default function Home() {
 
     const data = await res.json()
 
-    const resaleValue = 12000
-    const transport = 300
-    const repair = 500
-    const profitTarget = 1000
-
-    const mao =
-      resaleValue - transport - repair - profitTarget
-
-    setResult({
-      parsed: data,
-      resaleValue,
-      mao,
-      profit: resaleValue - mao,
-    })
+    setResult(data)
   }
 
   return (
@@ -48,9 +35,20 @@ export default function Home() {
 
       {result && (
         <div style={{ marginTop: 20 }}>
-          <p>Value: ${result.resaleValue}</p>
-          <p>MAO: ${result.mao}</p>
-          <p>Profit: ${result.profit}</p>
+          <h2>{result.dealRating} — Score {result.dealScore}</h2>
+
+          <p><strong>Title:</strong> {result.title}</p>
+          <p><strong>Asking:</strong> ${result.askingPrice}</p>
+          <p><strong>Utah Fast Flip Value:</strong> ${result.recommendedFastFlipValue}</p>
+          <p><strong>Safe MAO:</strong> ${result.safeMAO}</p>
+          <p><strong>Aggressive MAO:</strong> ${result.aggressiveMAO}</p>
+          <p><strong>Opening Offer:</strong> ${result.recommendedOpeningOffer}</p>
+          <p><strong>Walk Away:</strong> ${result.walkAwayPrice}</p>
+          <p><strong>Profit at Asking:</strong> ${result.estimatedProfitAtAsking}</p>
+          <p><strong>Profit at Offer:</strong> ${result.estimatedProfitAtRecommendedOffer}</p>
+          <p><strong>Risk:</strong> {result.riskLevel}</p>
+          <p><strong>Recommendation:</strong> {result.recommendation}</p>
+          <p><strong>Cash Offer:</strong> {result.cashOfferMessage}</p>
         </div>
       )}
     </div>
