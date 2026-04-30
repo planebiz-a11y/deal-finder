@@ -14,6 +14,21 @@ export async function POST(req: Request) {
 
     const region = buyRegion || "anywhere in the US outside Utah"
 
+    // Transport cost by region (to Utah)
+    function estimateTransport(r: string): number {
+      const s = r.toLowerCase()
+      if (/wyoming|idaho|nevada|colorado|arizona/.test(s))       return 300
+      if (/california|oregon|washington|montana/.test(s))        return 600
+      if (/texas|new mexico|kansas|nebraska/.test(s))            return 800
+      if (/midwest|iowa|missouri|illinois|indiana|ohio/.test(s)) return 1000
+      if (/minnesota|wisconsin|michigan|dakota/.test(s))         return 1100
+      if (/southeast|georgia|florida|alabama|tennessee/.test(s)) return 1200
+      if (/northeast|new york|pennsylvania|virginia/.test(s))    return 1400
+      return 800
+    }
+
+    const transportCost = estimateTransport(region)
+
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -40,14 +55,12 @@ export async function POST(req: Request) {
       return Response.json({ error: data.error.message }, { status: 500 })
     }
 
-    // DEBUG — return everything so we can see what Claude sent
     const allText = (data.content || [])
       .filter((b: any) => b.type === "text")
       .map((b: any) => b.text)
       .join("")
 
     const jsonMatch = allText.match(/\{[\s\S]*\}/)
-
     if (!jsonMatch) {
       return Response.json({
         error: "No JSON found",
@@ -59,12 +72,8 @@ export async function POST(req: Request) {
     let result: any = {}
     try {
       result = JSON.parse(jsonMatch[0])
-    } catch (e) {
-      return Response.json({
-        error: "JSON parse failed",
-        jsonMatch: jsonMatch[0].slice(0, 1000),
-        allText: allText.slice(0, 2000)
-      }, { status: 500 })
+    } catch {
+      return Response.json({ error: "Failed to parse response" }, { status: 500 })
     }
 
     const listings = (result.listings || []).map((l: any) => ({
@@ -72,6 +81,7 @@ export async function POST(req: Request) {
       utahAvgPrice: result.utahAvgPrice || 0,
       utahLowPrice: result.utahLowPrice || 0,
       utahHighPrice: result.utahHighPrice || 0,
+      transportCost,
     }))
 
     return Response.json({
@@ -80,10 +90,11 @@ export async function POST(req: Request) {
         utahAvgPrice: result.utahAvgPrice || 0,
         utahLowPrice: result.utahLowPrice || 0,
         utahHighPrice: result.utahHighPrice || 0,
-      }
+      },
+      transportCost,
     })
 
-  } catch (err) {
+  } catch {
     return Response.json({ error: "Search failed" }, { status: 500 })
   }
 }
