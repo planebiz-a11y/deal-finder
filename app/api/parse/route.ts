@@ -80,7 +80,14 @@ Return this JSON structure:
     ],
   })
 
-  return Response.json(
-    completion.choices[0].message.content
-  )
+    const content = completion.choices[0].message.content
+
+  if (!content) {
+    return Response.json(
+      { error: "No response from AI" },
+      { status: 500 }
+    )
+  }
+
+  return Response.json(JSON.parse(content))
 }
