@@ -10,14 +10,18 @@ export default function Home() {
   async function analyze() {
     if (!text.trim()) return
 
-    // 🔥 TEST DATA (bypasses search)
-    const searchData = {
-      listings: [
-        { title: "2018 RZR 1000", price: 8500 },
-        { title: "Dump trailer", price: 4000 },
-        { title: "Kubota excavator needs work", price: 12000 }
-      ]
-    }
+    const searchRes = await fetch("/api/search", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ query: text }),
+})
+
+const searchData = await searchRes.json()
+
+if (!searchData?.listings?.length) {
+  alert("No listings found")
+  return
+}
 
     const analyzeRes = await fetch("/api/analyzeDeals", {
       method: "POST",
