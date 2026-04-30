@@ -144,7 +144,7 @@ export default function Home() {
       const searchRes = await fetch("/api/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query }),
+        body: JSON.stringify({ query, buyRegion }),
       })
       const searchData = await searchRes.json()
 
