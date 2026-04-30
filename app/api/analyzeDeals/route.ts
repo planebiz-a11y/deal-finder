@@ -379,7 +379,7 @@ export async function POST(req: Request) {
         const spreadScore = listing.spreadScore || 0
         const transportCost = listing.transportCost || 50
 
-        // Table first — more reliable than scraped avg
+        // Table first — hardcoded values more reliable than scraped avg
         const tableResale = getUtahResaleValue(title, year, condition, hours)
         const estimatedResaleValue = tableResale > 0
           ? tableResale
