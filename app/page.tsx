@@ -114,6 +114,23 @@ const [topDeal, setTopDeal] = useState<any>(null)
           <p><strong>Risk:</strong> {result.riskLevel}</p>
           <p><strong>Recommendation:</strong> {result.recommendation}</p>
           <p><strong>Cash Offer:</strong> {result.cashOfferMessage}</p>
+
+{deals.length > 1 && (
+  <div style={{ marginTop: 20 }}>
+    <h2>All Deals</h2>
+
+    {deals.map((deal, i) => (
+      <div key={i} style={{ border: "1px solid #ccc", padding: 10, marginBottom: 10 }}>
+        <p><strong>{deal.title}</strong></p>
+        <p>Score: {deal.dealScore}</p>
+        <p>MAO: ${deal.safeMAO}</p>
+        {deal.link && (
+          <a href={deal.link} target="_blank">View</a>
+        )}
+      </div>
+    ))}
+  </div>
+)}
         </div>
       )}
     </div>
