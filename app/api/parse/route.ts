@@ -90,8 +90,8 @@ Return this JSON structure:
     )
   }
 
-  try {
-  const data = JSON.parse(content)
+    try {
+    const data = JSON.parse(content)
 
   const recommendedValue = Number(data.recommendedFastFlipValue || 0)
   const askingPrice = Number(data.askingPrice || 0)
