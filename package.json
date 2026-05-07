@@ -1,21 +1,6 @@
 {
-  "name": "deal-finder",
+  "name": "ksl-deal-finder",
   "version": "1.0.0",
-  "private": true,
-  "scripts": {
-    "build": "next build",
-    "start": "next start",
-    "dev": "next dev"
-  },
-  "dependencies": {
-    "next": "14.2.3",
-    "react": "18.2.0",
-    "react-dom": "18.2.0",
-    "openai": "^4.0.0"
-  },
-  "devDependencies": {
-    "typescript": "^5.4.5",
-    "@types/react": "^18.2.79",
-    "@types/node": "^20.12.7"
-  }
+  "engines": { "node": "24.x" },
+  "dependencies": {}
 }
